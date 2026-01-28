@@ -61,6 +61,9 @@ void Error_Handler(void);
 #define Tx_GPIO_Port GPIOA
 #define Rx_Pin GPIO_PIN_2
 #define Rx_GPIO_Port GPIOI
+#define USR_Pin GPIO_PIN_11
+#define USR_GPIO_Port GPIOI
+#define USR_EXTI_IRQn EXTI15_10_IRQn
 
 /* USER CODE BEGIN Private defines */
 
