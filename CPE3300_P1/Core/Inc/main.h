@@ -28,6 +28,7 @@ extern "C" {
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32f7xx_hal.h"
+#include <stdio.h>
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -61,6 +62,9 @@ void Error_Handler(void);
 #define Tx_GPIO_Port GPIOA
 #define Rx_Pin GPIO_PIN_2
 #define Rx_GPIO_Port GPIOI
+#define BLUE_Pin GPIO_PIN_11
+#define BLUE_GPIO_Port GPIOI
+#define BLUE_EXTI_IRQn EXTI15_10_IRQn
 
 /* USER CODE BEGIN Private defines */
 
