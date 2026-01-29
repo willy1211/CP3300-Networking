@@ -24,6 +24,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -77,6 +79,64 @@ GETCHAR_PROTOTYPE
 	HAL_UART_Receive(&huart1, (uint8_t *)&ch, 1, HAL_MAX_DELAY);
 	return ch;
 }
+
+// Function to convert string to binary representation
+char *stringToBinary(const char *input){
+	if(!input)
+		return NULL;
+
+	size_t len = strlen(input);
+
+	//Each character = 8 bits
+	char *binary = malloc(len*8 + 1); //allocate memory at runtime 8bit per character + 1 for Null character
+	if(!binary)
+		return NULL;
+	char *out = binary;
+	// Convert each character to its binary representation
+	for (size_t i = 0; i < len; i++)
+	{
+		unsigned char c = input[i];
+		for (int bit = 7; bit >= 0; bit--)
+		{
+			*out++ = ((c >> bit) & 1) ? '1' : '0';
+		}
+	}
+	*out = '\0';
+	return binary;
+}
+
+// Function to convert binary string to Manchester encoding 0->"01", 1->"10"
+char *binaryToManchester(const char *binary){
+	if (!binary)
+		return NULL;
+
+	size_t len = strlen(binary);
+
+	// Each binary bit becomes 2 Manchester bits
+	char *manchester = malloc(len * 2 + 1);
+	if (!manchester)
+		return NULL;
+
+	char *m_out = manchester;
+
+	for (size_t i = 0; i < len; i++)
+	{
+		if (binary[i] == '0')
+		{
+			*m_out++ = '0';
+			*m_out++ = '1';
+		}
+		else if (binary[i] == '1')
+		{
+			*m_out++ = '1';
+			*m_out++ = '0';
+		}
+	}
+
+	*m_out = '\0';
+	return manchester;
+
+}
 /* USER CODE END 0 */
 
 /**
@@ -119,13 +179,44 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-	  printf("Hello world.\n");
-	  HAL_Delay(1000);
+//	  printf("Hello world.\n");
+//	  HAL_Delay(1000);
+
+
+//The code below was used to test scanf, printing and writing from Realterm
+//	  int number;
+//	  char word[50];
+//	  printf("Enter an integer: ");
+//	  scanf("%d", &number);
+//
+//	  printf("Enter a word: ");
+//	  scanf("%49s", word); // limit length to avoid overflow
+//
+//	  printf("You entered number = %d\n", number);
+//	  printf("You entered word = %s\n", word);
+
+	  char input[50];
+	  printf("Enter a word: ");
+	  //fgets(input, sizeof(input), stdin);
+	  scanf("%49s", input);
+
+	  char *binary = stringToBinary(input);
+	  char *manchester = binaryToManchester(binary);
+
+	  printf("Binary value:\n%s\n", binary);
+	  printf("Manchester encoded value:\n%s\n", manchester);
+
+	  //Free allocated memory
+	  free(binary);
+	  free(manchester);
 
     /* USER CODE BEGIN 3 */
   }
+
+
   /* USER CODE END 3 */
 }
+
 
 /**
   * @brief System Clock Configuration
