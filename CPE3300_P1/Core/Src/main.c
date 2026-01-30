@@ -24,10 +24,22 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+bool transmitting = false;
+int current_transmit_index = 0;
+int message_length = 0;
+
+const char *manchester_start = "1001100110011001";
+int start_index = 0;
+int bit_length_index = 0;
+
+char *manchester_message;
+int message_index = 0;
 
 /* USER CODE END PTD */
 
@@ -35,7 +47,7 @@
 /* USER CODE BEGIN PD */
 #define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
 #define GETCHAR_PROTOTYPE int __io_getchar(void)
-bool send_data = true;
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -77,6 +89,73 @@ GETCHAR_PROTOTYPE
 	HAL_UART_Receive(&huart1, (uint8_t *)&ch, 1, HAL_MAX_DELAY);
 	return ch;
 }
+
+
+// Function to convert string to binary representation
+char *stringToBinary(const char *input){
+	if(!input)
+		return NULL;
+
+	size_t len = strlen(input);
+
+	//Each character = 8 bits
+	char *binary = malloc(len*8 + 1); //allocate memory at runtime 8bit per character + 1 for Null character
+	if(!binary)
+		return NULL;
+	char *out = binary;
+	// Convert each character to its binary representation
+	for (size_t i = 0; i < len; i++)
+	{
+		unsigned char c = input[i];
+		for (int bit = 7; bit >= 0; bit--)
+		{
+			*out++ = ((c >> bit) & 1) ? '1' : '0';
+		}
+	}
+	*out = '\0';
+	return binary;
+}
+
+// Function to convert binary string to Manchester encoding 0->"01", 1->"10"
+char *binaryToManchester(const char *binary){
+	if (!binary)
+		return NULL;
+
+	size_t len = strlen(binary);
+
+	// Each binary bit becomes 2 Manchester bits
+	char *manchester = malloc(len * 2 + 1);
+	if (!manchester)
+		return NULL;
+
+	char *m_out = manchester;
+
+	for (size_t i = 0; i < len; i++)
+	{
+		if (binary[i] == '0')
+		{
+			*m_out++ = '0';
+			*m_out++ = '1';
+		}
+		else if (binary[i] == '1')
+		{
+			*m_out++ = '1';
+			*m_out++ = '0';
+		}
+	}
+
+	*m_out = '\0';
+	return manchester;
+
+}
+
+void startTransmission(){
+	current_transmit_index = 0;
+	start_index = 0;
+	HAL_TIM_Base_Start_IT(&htim10);
+
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -111,7 +190,7 @@ int main(void)
   MX_USART1_UART_Init();
   MX_TIM10_Init();
   /* USER CODE BEGIN 2 */
-  HAL_TIM_Base_Start_IT(&htim10);
+  //HAL_TIM_Base_Start_IT(&htim10);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -119,8 +198,19 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-	  printf("Hello world.\n");
-	  HAL_Delay(1000);
+	  HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, SET);
+	  printf("Please eneter message to send: ");
+	  char message[256] = {0};
+	  scanf("%s255", message);
+	  int message_length = strlen(message);
+
+	  char *binary = stringToBinary(message);
+	  manchester_message = binaryToManchester(binary);
+	  startTransmission();
+	  HAL_Delay(100);
+
+	  while(transmitting){};
+
 
     /* USER CODE BEGIN 3 */
   }
@@ -281,21 +371,27 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-uint8_t manchester_start_0x55[18] = {1,0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,0};
-uint8_t start_index = 0;
-uint8_t wait_count = 0;
+
 // TIM10 has a 0.5ms period. This will allow us to toggle
 // the output pin properly for the manchester encoding.
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	if(htim->Instance == TIM10){
-		// TODO: add code to send bits
-
-		if(start_index < 17){
-			HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, manchester_start_0x55[start_index++]);
-		} else {
-			HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, GPIO_PIN_SET);
-			start_index = 0;
-			HAL_TIM_Base_Stop(&htim10);
+		// send the initial 0x55 preable
+		if(start_index < 15){
+			if(manchester_start[start_index++] == '0'){
+				HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, RESET);
+			} else {
+				HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, SET);
+			}
+		} else if(bit_length_index != 0) {
+			//TODO: add code to send the length
+			// of the message
+		} else if (message_index < strlen(manchester_message)){
+			if(manchester_message[message_index++] == '0'){
+				HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, RESET);
+			} else {
+				HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, SET);
+			}
 		}
 	}
 }
