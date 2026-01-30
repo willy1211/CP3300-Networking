@@ -31,7 +31,6 @@
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 bool transmitting = false;
-int current_transmit_index = 0;
 int message_length = 0;
 
 const char *manchester_start = "1001100110011001";
@@ -39,6 +38,7 @@ int start_index = 0;
 int bit_length_index = 0;
 
 char *manchester_message;
+char *binary_message;
 int message_index = 0;
 
 /* USER CODE END PTD */
@@ -70,6 +70,14 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_TIM10_Init(void);
+
+void sendBit(char bit) {
+	if (bit == '0'){
+		HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, RESET);
+	} else {
+		HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, SET);
+	}
+}
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -150,10 +158,17 @@ char *binaryToManchester(const char *binary){
 }
 
 void startTransmission(){
-	current_transmit_index = 0;
+	message_index = 0;
+	transmitting = true;
 	start_index = 0;
 	HAL_TIM_Base_Start_IT(&htim10);
 
+}
+
+void stopTransmission(){
+	HAL_TIM_Base_Start_IT(&htim10);
+	HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, SET);
+	transmitting = false;
 }
 
 /* USER CODE END 0 */
@@ -198,21 +213,21 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
+
+    /* USER CODE BEGIN 3 */
 	  HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, SET);
 	  printf("Please eneter message to send: ");
 	  char message[256] = {0};
 	  scanf("%s255", message);
 	  int message_length = strlen(message);
 
-	  char *binary = stringToBinary(message);
-	  manchester_message = binaryToManchester(binary);
+	  binary_message = stringToBinary(message);
+	  manchester_message = binaryToManchester(binary_message);
+	  printf("Sending message: %s \n", message);
 	  startTransmission();
 	  HAL_Delay(100);
-
 	  while(transmitting){};
-
-
-    /* USER CODE BEGIN 3 */
+	  printf("Message sent. \n");
   }
   /* USER CODE END 3 */
 }
@@ -279,9 +294,9 @@ static void MX_TIM10_Init(void)
 
   /* USER CODE END TIM10_Init 1 */
   htim10.Instance = TIM10;
-  htim10.Init.Prescaler = 167;
+  htim10.Init.Prescaler = 16799;
   htim10.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim10.Init.Period = 499;
+  htim10.Init.Period = 4999;
   htim10.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim10.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
   if (HAL_TIM_Base_Init(&htim10) != HAL_OK)
@@ -378,20 +393,13 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	if(htim->Instance == TIM10){
 		// send the initial 0x55 preable
 		if(start_index < 15){
-			if(manchester_start[start_index++] == '0'){
-				HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, RESET);
-			} else {
-				HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, SET);
-			}
+			sendBit(manchester_start[start_index++]);
 		} else if(bit_length_index != 0) {
-			//TODO: add code to send the length
-			// of the message
+			//TODO: add code to send the length of the message
 		} else if (message_index < strlen(manchester_message)){
-			if(manchester_message[message_index++] == '0'){
-				HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, RESET);
-			} else {
-				HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, SET);
-			}
+			sendBit(manchester_message[message_index++]);
+		} else {
+			stopTransmission();
 		}
 	}
 }
@@ -399,7 +407,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 	if(GPIO_Pin == USR_Pin){
 
-		HAL_TIM_Base_Start_IT(&htim10);
 	}
 }
 /* USER CODE END 4 */
