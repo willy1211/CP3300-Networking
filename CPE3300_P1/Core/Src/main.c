@@ -34,11 +34,13 @@ bool transmitting = false;
 int message_length = 0;
 
 const char *manchester_start = "1001100110011001";
+
 int start_index = 0;
 int bit_length_index = 0;
 
 char *manchester_message;
 char *binary_message;
+const char *message_length_manchester="1010101010100110";
 int message_index = 0;
 
 /* USER CODE END PTD */
@@ -70,14 +72,6 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_TIM10_Init(void);
-
-void sendBit(char bit) {
-	if (bit == '0'){
-		HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, RESET);
-	} else {
-		HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, SET);
-	}
-}
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -98,6 +92,14 @@ GETCHAR_PROTOTYPE
 	return ch;
 }
 
+
+void sendBit(char bit) {
+	if (bit == '0'){
+		HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, RESET);
+	} else if (bit=='1') {
+		HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, SET);
+	}
+}
 
 // Function to convert string to binary representation
 char *stringToBinary(const char *input){
@@ -157,16 +159,35 @@ char *binaryToManchester(const char *binary){
 
 }
 
+void lengthToString(uint16_t message_length, char *res){
+    int idx = 0;
+
+    for (int i = 7; i >= 0; i--) {
+        if ((message_length & (1 << i)) >= 1) {
+            // 1 → 01
+            res[idx++] = '1';
+            res[idx++] = '0';
+        } else {
+            // 0 → 10
+            res[idx++] = '0';
+            res[idx++] = '1';
+        }
+    }
+
+    res[idx] = '\0';
+}
+
 void startTransmission(){
 	message_index = 0;
 	transmitting = true;
 	start_index = 0;
+	bit_length_index = 0;
 	HAL_TIM_Base_Start_IT(&htim10);
 
 }
 
 void stopTransmission(){
-	HAL_TIM_Base_Start_IT(&htim10);
+	HAL_TIM_Base_Stop_IT(&htim10);
 	HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, SET);
 	transmitting = false;
 }
@@ -219,7 +240,14 @@ int main(void)
 	  printf("Please eneter message to send: ");
 	  char message[256] = {0};
 	  scanf("%s255", message);
-	  int message_length = strlen(message);
+	  uint16_t message_size = strlen(message);
+	  printf("Message length %d\n", message_size);
+
+	  //lengthToString(message_size, message_length_manchester);
+	  //message_length_manchester = binaryToManchester(length_string);
+
+	  //printf("Message length: %s\n", message_length_manchester);
+
 
 	  binary_message = stringToBinary(message);
 	  manchester_message = binaryToManchester(binary_message);
@@ -294,9 +322,9 @@ static void MX_TIM10_Init(void)
 
   /* USER CODE END TIM10_Init 1 */
   htim10.Instance = TIM10;
-  htim10.Init.Prescaler = 16799;
+  htim10.Init.Prescaler = 167;
   htim10.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim10.Init.Period = 4999;
+  htim10.Init.Period = 499;
   htim10.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim10.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
   if (HAL_TIM_Base_Init(&htim10) != HAL_OK)
@@ -392,11 +420,11 @@ static void MX_GPIO_Init(void)
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	if(htim->Instance == TIM10){
 		// send the initial 0x55 preable
-		if(start_index < 15){
+		if(start_index < 16){
 			sendBit(manchester_start[start_index++]);
-		} else if(bit_length_index != 0) {
-			//TODO: add code to send the length of the message
-		} else if (message_index < strlen(manchester_message)){
+		} else if(bit_length_index < 16) {
+			sendBit(message_length_manchester[bit_length_index++]);
+		} else if (message_index <= (strlen(manchester_message))){
 			sendBit(manchester_message[message_index++]);
 		} else {
 			stopTransmission();
