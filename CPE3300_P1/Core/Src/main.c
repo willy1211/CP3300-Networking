@@ -40,9 +40,12 @@ int bit_length_index = 0;
 
 char *manchester_message;
 char *binary_message;
-const char *message_length_manchester="1010101010100110";
+//const char *message_length_manchester="1010101010100110";
+char message_length_manchester[17];
 int message_index = 0;
 
+//const char *combined_message="100110011001100110101010101001101001101010101001";
+char *combined_message;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -144,13 +147,13 @@ char *binaryToManchester(const char *binary){
 	{
 		if (binary[i] == '0')
 		{
-			*m_out++ = '0';
 			*m_out++ = '1';
+			*m_out++ = '0';
 		}
 		else if (binary[i] == '1')
 		{
-			*m_out++ = '1';
 			*m_out++ = '0';
+			*m_out++ = '1';
 		}
 	}
 
@@ -165,12 +168,12 @@ void lengthToString(uint16_t message_length, char *res){
     for (int i = 7; i >= 0; i--) {
         if ((message_length & (1 << i)) >= 1) {
             // 1 → 01
-            res[idx++] = '1';
             res[idx++] = '0';
+            res[idx++] = '1';
         } else {
             // 0 → 10
-            res[idx++] = '0';
             res[idx++] = '1';
+            res[idx++] = '0';
         }
     }
 
@@ -191,6 +194,31 @@ void stopTransmission(){
 	HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, SET);
 	transmitting = false;
 }
+
+// TIM10 has a 0.5ms period. This will allow us to toggle
+// the output pin properly for the manchester encoding.
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
+	if(htim->Instance == TIM10){
+		// send the initial 0x55 preable
+//		if(start_index < 16){
+//			sendBit(manchester_start[start_index++]);
+//		} else if(bit_length_index < 16) {
+//			sendBit(message_length_manchester[bit_length_index++]);
+//		} else if (message_index <= (strlen(manchester_message))){
+//			sendBit(manchester_message[message_index++]);
+//		} else {
+//			stopTransmission();
+//		}
+
+		if(message_index < strlen(combined_message)){
+			sendBit(combined_message[message_index++]);
+		} else {
+			stopTransmission();
+		}
+	}
+}
+
+
 
 /* USER CODE END 0 */
 
@@ -241,17 +269,21 @@ int main(void)
 	  char message[256] = {0};
 	  scanf("%s255", message);
 	  uint16_t message_size = strlen(message);
-	  printf("Message length %d\n", message_size);
 
-	  //lengthToString(message_size, message_length_manchester);
-	  //message_length_manchester = binaryToManchester(length_string);
-
-	  //printf("Message length: %s\n", message_length_manchester);
-
+	  lengthToString(strlen(message), message_length_manchester);
 
 	  binary_message = stringToBinary(message);
 	  manchester_message = binaryToManchester(binary_message);
-	  printf("Sending message: %s \n", message);
+
+	  int combined_length = strlen(manchester_start) + strlen(message_length_manchester) + strlen(manchester_message);
+	  combined_message = malloc((combined_length + 1) * sizeof(char));
+	  snprintf(combined_message, (combined_length + 1) * sizeof(char), "%s%s%s", manchester_start, message_length_manchester, manchester_message);
+
+	  printf("Sending message: %s \n", combined_message);
+	  printf("Manchester start: %s\n", manchester_start);
+	  printf("message length: %s\n", message_length_manchester);
+	  printf("Message: %s\n", manchester_message);
+
 	  startTransmission();
 	  HAL_Delay(100);
 	  while(transmitting){};
@@ -415,22 +447,6 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
-// TIM10 has a 0.5ms period. This will allow us to toggle
-// the output pin properly for the manchester encoding.
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
-	if(htim->Instance == TIM10){
-		// send the initial 0x55 preable
-		if(start_index < 16){
-			sendBit(manchester_start[start_index++]);
-		} else if(bit_length_index < 16) {
-			sendBit(message_length_manchester[bit_length_index++]);
-		} else if (message_index <= (strlen(manchester_message))){
-			sendBit(manchester_message[message_index++]);
-		} else {
-			stopTransmission();
-		}
-	}
-}
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 	if(GPIO_Pin == USR_Pin){
