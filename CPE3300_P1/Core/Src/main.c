@@ -31,20 +31,9 @@
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 bool transmitting = false;
-int message_length = 0;
-
 const char *manchester_start = "1001100110011001";
 
-int start_index = 0;
-int bit_length_index = 0;
-
-char *manchester_message;
-char *binary_message;
-//const char *message_length_manchester="1010101010100110";
-char message_length_manchester[17];
 int message_index = 0;
-
-//const char *combined_message="100110011001100110101010101001101001101010101001";
 char *combined_message;
 /* USER CODE END PTD */
 
@@ -176,15 +165,12 @@ void lengthToString(uint16_t message_length, char *res){
             res[idx++] = '0';
         }
     }
-
     res[idx] = '\0';
 }
 
 void startTransmission(){
 	message_index = 0;
 	transmitting = true;
-	start_index = 0;
-	bit_length_index = 0;
 	HAL_TIM_Base_Start_IT(&htim10);
 
 }
@@ -199,17 +185,6 @@ void stopTransmission(){
 // the output pin properly for the manchester encoding.
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	if(htim->Instance == TIM10){
-		// send the initial 0x55 preable
-//		if(start_index < 16){
-//			sendBit(manchester_start[start_index++]);
-//		} else if(bit_length_index < 16) {
-//			sendBit(message_length_manchester[bit_length_index++]);
-//		} else if (message_index <= (strlen(manchester_message))){
-//			sendBit(manchester_message[message_index++]);
-//		} else {
-//			stopTransmission();
-//		}
-
 		if(message_index < strlen(combined_message)){
 			sendBit(combined_message[message_index++]);
 		} else {
@@ -254,7 +229,9 @@ int main(void)
   MX_USART1_UART_Init();
   MX_TIM10_Init();
   /* USER CODE BEGIN 2 */
-  //HAL_TIM_Base_Start_IT(&htim10);
+  char *manchester_message;
+  char *binary_message;
+  char message_length_manchester[17];
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -268,8 +245,8 @@ int main(void)
 	  printf("Please eneter message to send: ");
 	  char message[256] = {0};
 	  scanf("%s255", message);
-	  uint16_t message_size = strlen(message);
 
+	  // convert the message length into manchester form.
 	  lengthToString(strlen(message), message_length_manchester);
 
 	  binary_message = stringToBinary(message);
@@ -279,14 +256,12 @@ int main(void)
 	  combined_message = malloc((combined_length + 1) * sizeof(char));
 	  snprintf(combined_message, (combined_length + 1) * sizeof(char), "%s%s%s", manchester_start, message_length_manchester, manchester_message);
 
-	  printf("Sending message: %s \n", combined_message);
-	  printf("Manchester start: %s\n", manchester_start);
-	  printf("message length: %s\n", message_length_manchester);
-	  printf("Message: %s\n", manchester_message);
-
 	  startTransmission();
 	  HAL_Delay(100);
 	  while(transmitting){};
+	  free(binary_message);
+	  free(manchester_message);
+
 	  printf("Message sent. \n");
   }
   /* USER CODE END 3 */
