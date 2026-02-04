@@ -59,11 +59,17 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define Tx_Pin GPIO_PIN_15
 #define Tx_GPIO_Port GPIOA
+#define BUSY_Pin GPIO_PIN_3
+#define BUSY_GPIO_Port GPIOI
 #define Rx_Pin GPIO_PIN_2
 #define Rx_GPIO_Port GPIOI
+#define COLLISION_Pin GPIO_PIN_0
+#define COLLISION_GPIO_Port GPIOI
 #define USR_Pin GPIO_PIN_11
 #define USR_GPIO_Port GPIOI
 #define USR_EXTI_IRQn EXTI15_10_IRQn
+#define IDLE_Pin GPIO_PIN_6
+#define IDLE_GPIO_Port GPIOH
 
 /* USER CODE BEGIN Private defines */
 
