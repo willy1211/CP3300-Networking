@@ -29,6 +29,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include "transmitter.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -80,7 +81,6 @@ GETCHAR_PROTOTYPE
 	return ch;
 }
 
-
 void sendBit(char bit) {
 	if (bit == '0'){
 		HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, RESET);
@@ -90,79 +90,6 @@ void sendBit(char bit) {
 }
 
 // Function to convert string to binary representation
-char *stringToBinary(const char *input){
-	if(!input)
-		return NULL;
-
-	size_t len = strlen(input);
-
-	//Each character = 8 bits
-	char *binary = malloc(len*8 + 1); //allocate memory at runtime 8bit per character + 1 for Null character
-	if(!binary)
-		return NULL;
-	char *out = binary;
-	// Convert each character to its binary representation
-	for (size_t i = 0; i < len; i++)
-	{
-		unsigned char c = input[i];
-		for (int bit = 7; bit >= 0; bit--)
-		{
-			*out++ = ((c >> bit) & 1) ? '1' : '0';
-		}
-	}
-	*out = '\0';
-	return binary;
-}
-
-// Function to convert binary string to Manchester encoding 0->"01", 1->"10"
-char *binaryToManchester(const char *binary){
-	if (!binary)
-		return NULL;
-
-	size_t len = strlen(binary);
-
-	// Each binary bit becomes 2 Manchester bits
-	char *manchester = malloc(len * 2 + 1);
-	if (!manchester)
-		return NULL;
-
-	char *m_out = manchester;
-
-	for (size_t i = 0; i < len; i++)
-	{
-		if (binary[i] == '0')
-		{
-			*m_out++ = '1';
-			*m_out++ = '0';
-		}
-		else if (binary[i] == '1')
-		{
-			*m_out++ = '0';
-			*m_out++ = '1';
-		}
-	}
-
-	*m_out = '\0';
-	return manchester;
-
-}
-
-void lengthToString(uint16_t message_length, char *res){
-    int idx = 0;
-
-    for (int i = 7; i >= 0; i--) {
-        if ((message_length & (1 << i)) >= 1) {
-            // 1 → 01
-            res[idx++] = '0';
-            res[idx++] = '1';
-        } else {
-            // 0 → 10
-            res[idx++] = '1';
-            res[idx++] = '0';
-        }
-    }
-    res[idx] = '\0';
-}
 
 void startTransmission(){
 	message_index = 0;
@@ -178,24 +105,28 @@ void stopTransmission(){
 }
 
 // TIM10 has a 0.5ms period. This will allow us to toggle
+// TIM11 is for busy
+// TIM9 is for collision
 // the output pin properly for the manchester encoding.
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
-	if(htim->Instance == TIM10){
+	if(htim->Instance == TIM10){ // Tx timer
+  
 		if(message_index < strlen(combined_message)){
 			sendBit(combined_message[message_index++]);
 		} else {
+      // message has been sent
 			stopTransmission();
 		}
-	} else if (htim->Instance == TIM9){
-		printf("Collion timer triggered");
-		HAL_TIM_Base_Start_IT(&htim11);
+
+	} else if (htim->Instance == TIM9){ // Collison timer
+    
+    HAL_GPIO_WritePin()
 		HAL_TIM_Base_Stop_IT(&htim9);
-	} else if (htim->Instance == TIM11){
+	} else if (htim->Instance == TIM11){ // idle timer
 		printf("Idle timer triggered");
 		HAL_TIM_Base_Stop_IT(&htim11);
 	}
 }
-
 
 
 /* USER CODE END 0 */
@@ -250,7 +181,6 @@ int main(void)
 	  printf("Please eneter message to send: ");
 	  char message[256] = {0};
 	  scanf("%s255", message);
-	  HAL_TIM_Base_Start_IT(&htim9);
 
 	  // convert the message length into manchester form.
 	  lengthToString(strlen(message), message_length_manchester);
@@ -323,8 +253,18 @@ void SystemClock_Config(void)
 
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
-	if(GPIO_Pin == USR_Pin){
+  // check to see if the interupt was caused by the Rx Pin edge
+	if(GPIO_Pin == Rx_Pin){
+    // read the pin value once the itnerupt is triggered
+    if(HAL_GPIO_ReadPin(Rx_GPIO_Port, Rx_Pin) == GPIO_PIN_SET){
+      // TODO: add code for rising edge
+      HAL_TIM_Base_Stop_IT(&htim9);
 
+      // start the idle timer
+      HAL_TIM_Base_Start_IT(&tim11);
+    } else {
+      // TODO: add falling edge code
+    }
 	}
 }
 /* USER CODE END 4 */
