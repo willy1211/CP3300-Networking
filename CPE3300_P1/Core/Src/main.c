@@ -100,6 +100,17 @@ char *stringToBinary(const char *input){
 		{
 			*out++ = ((c >> bit) & 1) ? '1' : '0';
 		}
+<<<<<<< Updated upstream
+=======
+
+	} else if (htim->Instance == TIM9){ // Collison timer
+    
+
+		HAL_TIM_Base_Stop_IT(&htim9);
+	} else if (htim->Instance == TIM11){ // idle timer
+		printf("Idle timer triggered");
+		HAL_TIM_Base_Stop_IT(&htim11);
+>>>>>>> Stashed changes
 	}
 	*out = '\0';
 	return binary;
@@ -211,6 +222,31 @@ int main(void)
 	  free(manchester);
 
     /* USER CODE BEGIN 3 */
+<<<<<<< Updated upstream
+=======
+	  HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, SET);
+	  printf("Please enter a message to send: ");
+	  char message[256] = {0};
+	  scanf("%s255", message);
+
+	  // convert the message length into manchester form.
+	  lengthToString(strlen(message), message_length_manchester);
+
+	  binary_message = stringToBinary(message);
+	  manchester_message = binaryToManchester(binary_message);
+
+	  int combined_length = strlen(manchester_start) + strlen(message_length_manchester) + strlen(manchester_message);
+	  combined_message = malloc((combined_length + 1) * sizeof(char));
+	  snprintf(combined_message, (combined_length + 1) * sizeof(char), "%s%s%s", manchester_start, message_length_manchester, manchester_message);
+
+	  startTransmission();
+	  HAL_Delay(100);
+	  while(transmitting){};
+	  free(binary_message);
+	  free(manchester_message);
+
+	  printf("Message sent. \n");
+>>>>>>> Stashed changes
   }
 
 
@@ -394,7 +430,15 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 	if(GPIO_Pin == USR_Pin){
 
+<<<<<<< Updated upstream
 		HAL_TIM_Base_Start_IT(&htim10);
+=======
+      // start the idle timer
+      HAL_TIM_Base_Start_IT(&htim11);
+    } else {
+      // TODO: add falling edge code
+    }
+>>>>>>> Stashed changes
 	}
 }
 /* USER CODE END 4 */
