@@ -120,7 +120,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 
 	} else if (htim->Instance == TIM9){ // Collison timer
     
-    HAL_GPIO_WritePin()
 		HAL_TIM_Base_Stop_IT(&htim9);
 	} else if (htim->Instance == TIM11){ // idle timer
 		printf("Idle timer triggered");
@@ -261,7 +260,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
       HAL_TIM_Base_Stop_IT(&htim9);
 
       // start the idle timer
-      HAL_TIM_Base_Start_IT(&tim11);
+      HAL_TIM_Base_Start_IT(&htim11);
     } else {
       // TODO: add falling edge code
     }
