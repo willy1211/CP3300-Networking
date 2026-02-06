@@ -63,6 +63,7 @@ void Error_Handler(void);
 #define BUSY_GPIO_Port GPIOI
 #define Rx_Pin GPIO_PIN_2
 #define Rx_GPIO_Port GPIOI
+#define Rx_EXTI_IRQn EXTI2_IRQn
 #define COLLISION_Pin GPIO_PIN_0
 #define COLLISION_GPIO_Port GPIOI
 #define USR_Pin GPIO_PIN_11

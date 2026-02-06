@@ -119,10 +119,23 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 		}
 
 	} else if (htim->Instance == TIM9){ // Collison timer
-    
+
+		// if Rx is low, after 1.1 ms, enter collsion state
+		if(HAL_GPIO_ReadPin(COLLISION_GPIO_Port, COLLISION_Pin) == GPIO_PIN_RESET){
+			HAL_GPIO_WritePin(COLLISION_GPIO_Port, COLLISION_Pin, GPIO_PIN_SET);
+			//HAL_GPIO_WritePin(BUSY_GPIO_Port, BUSY_Pin, GPIO_PIN_RESET);
+		} else {
+			HAL_GPIO_WritePin(COLLISION_GPIO_Port, COLLISION_Pin, GPIO_PIN_RESET);
+		}
 		HAL_TIM_Base_Stop_IT(&htim9);
+
 	} else if (htim->Instance == TIM11){ // idle timer
-		printf("Idle timer triggered");
+		// TODO: ADD IDLE LOGIC
+		// if after 1.1ms rx is high, enter idle state
+		if(HAL_GPIO_ReadPin(Rx_GPIO_Port, Rx_Pin) == GPIO_PIN_SET){
+
+		}
+
 		HAL_TIM_Base_Stop_IT(&htim11);
 	}
 }
@@ -179,8 +192,10 @@ int main(void)
 	  HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, SET);
 	  printf("Please eneter message to send: ");
 	  char message[256] = {0};
-	  scanf("%s255", message);
+	  //scanf("%s255", message);
+	  HAL_TIM_Base_Start_IT(&htim9);
 
+	  while (1){};
 	  // convert the message length into manchester form.
 	  lengthToString(strlen(message), message_length_manchester);
 
@@ -250,20 +265,22 @@ void SystemClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 
-
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
   // check to see if the interupt was caused by the Rx Pin edge
+	// TODO: Impliment BUSY CODE
+	// TODO: Implement IDLE CODE
 	if(GPIO_Pin == Rx_Pin){
-    // read the pin value once the itnerupt is triggered
-    if(HAL_GPIO_ReadPin(Rx_GPIO_Port, Rx_Pin) == GPIO_PIN_SET){
-      // TODO: add code for rising edge
-      HAL_TIM_Base_Stop_IT(&htim9);
+		// RISING EDGE
+		if(HAL_GPIO_ReadPin(Rx_GPIO_Port, Rx_Pin) == GPIO_PIN_SET){
+			// start idle timer
+			HAL_TIM_Base_Stop_IT(&htim9); // stop collision timer
+			__HAL_TIM_SET_COUNTER(&htim9, 0); // reset collision timer count register
+			HAL_GPIO_WritePin(COLLISION_GPIO_Port, COLLISION_Pin, GPIO_PIN_RESET);// set collision to low
 
-      // start the idle timer
-      HAL_TIM_Base_Start_IT(&htim11);
-    } else {
-      // TODO: add falling edge code
-    }
+		} else {
+
+			HAL_TIM_Base_Start_IT(&htim9); // start collision timer
+		}
 	}
 }
 /* USER CODE END 4 */
