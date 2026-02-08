@@ -123,7 +123,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 		// if Rx is low, after 1.1 ms, enter collsion state
 		if(HAL_GPIO_ReadPin(COLLISION_GPIO_Port, COLLISION_Pin) == GPIO_PIN_RESET){
 			HAL_GPIO_WritePin(COLLISION_GPIO_Port, COLLISION_Pin, GPIO_PIN_SET);
-			//HAL_GPIO_WritePin(BUSY_GPIO_Port, BUSY_Pin, GPIO_PIN_RESET);
+			HAL_GPIO_WritePin(BUSY_GPIO_Port, BUSY_Pin, GPIO_PIN_RESET);
 		} else {
 			HAL_GPIO_WritePin(COLLISION_GPIO_Port, COLLISION_Pin, GPIO_PIN_RESET);
 		}
@@ -133,6 +133,15 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 		// TODO: ADD IDLE LOGIC
 		// if after 1.1ms rx is high, enter idle state
 		if(HAL_GPIO_ReadPin(Rx_GPIO_Port, Rx_Pin) == GPIO_PIN_SET){
+			HAL_GPIO_WritePin(IDLE_GPIO_Port, IDLE_Pin, GPIO_PIN_SET);
+
+			//clear other states @FIXME
+			HAL_GPIO_WritePin(BUSY_GPIO_Port, BUSY_Pin,GPIO_PIN_RESET);
+			HAL_GPIO_WritePin(COLLISION_GPIO_Port, COLLISION_Pin,GPIO_PIN_RESET);
+
+		} else{
+			//clear idle state
+			HAL_GPIO_WritePin(IDLE_GPIO_Port, IDLE_Pin,GPIO_PIN_RESET);
 
 		}
 
@@ -270,19 +279,42 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 	// TODO: Impliment BUSY CODE
 	// TODO: Implement IDLE CODE
 	if(GPIO_Pin == Rx_Pin){
-		// RISING EDGE
-		if(HAL_GPIO_ReadPin(Rx_GPIO_Port, Rx_Pin) == GPIO_PIN_SET){
-			// start idle timer
-			HAL_TIM_Base_Stop_IT(&htim9); // stop collision timer
-			__HAL_TIM_SET_COUNTER(&htim9, 0); // reset collision timer count register
-			HAL_GPIO_WritePin(COLLISION_GPIO_Port, COLLISION_Pin, GPIO_PIN_RESET);// set collision to low
+		//@FIXME
+		//RX changed -> busy unless proven otherwise
+		HAL_GPIO_WritePin(BUSY_GPIO_Port, BUSY_Pin, GPIO_PIN_SET);
+		HAL_GPIO_WritePin(IDLE_GPIO_Port, IDLE_Pin, GPIO_PIN_RESET);
+		HAL_GPIO_WritePin(COLLISION_GPIO_Port, COLLISION_Pin, GPIO_PIN_RESET);
 
-		} else {
+		//Stop both timers since Rx toggled early
+		HAL_TIM_Base_Stop_IT(&htim9); //collision
+		HAL_TIM_Base_Stop_IT(&htim11); //idle
+		__HAL_TIM_SET_COUNTER(&htim9, 0); //reset collision timer count
+		__HAL_TIM_SET_COUNTER(&htim11, 0); //reset idle timer count
 
-			HAL_TIM_Base_Start_IT(&htim9); // start collision timer
+		//Rising edge --> idle
+		if(HAL_GPIO_ReadPin(Rx_GPIO_Port, Rx_Pin)==GPIO_PIN_SET){
+			HAL_TIM_Base_Start_IT(&htim11); //start idle timer
+		} else { //Falling edge ->collision
+			HAL_TIM_Base_Start_IT(&htim9); //start collision timer
 		}
+
+
+
+//		// RISING EDGE
+//		if(HAL_GPIO_ReadPin(Rx_GPIO_Port, Rx_Pin) == GPIO_PIN_SET){
+//			// start idle timer
+//			HAL_TIM_Base_Stop_IT(&htim9); // stop collision timer
+//			__HAL_TIM_SET_COUNTER(&htim9, 0); // reset collision timer count register
+//			HAL_GPIO_WritePin(COLLISION_GPIO_Port, COLLISION_Pin, GPIO_PIN_RESET);// set collision to low
+//
+//		} else {
+//
+//			HAL_TIM_Base_Start_IT(&htim9); // start collision timer
+//		}
+
 	}
 }
+
 /* USER CODE END 4 */
 
 /**
