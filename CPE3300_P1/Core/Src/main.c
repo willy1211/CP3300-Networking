@@ -130,7 +130,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 		HAL_TIM_Base_Stop_IT(&htim9);
 
 	} else if (htim->Instance == TIM11){ // idle timer
-		// TODO: ADD IDLE LOGIC
 		// if after 1.1ms rx is high, enter idle state
 		if(HAL_GPIO_ReadPin(Rx_GPIO_Port, Rx_Pin) == GPIO_PIN_SET){
 			HAL_GPIO_WritePin(IDLE_GPIO_Port, IDLE_Pin, GPIO_PIN_SET);
@@ -204,6 +203,7 @@ int main(void)
 	  //scanf("%s255", message);
 	  HAL_TIM_Base_Start_IT(&htim9);
 
+	  // REMOVE THIS TO ENABLE TRANSMISSION
 	  while (1){};
 	  // convert the message length into manchester form.
 	  lengthToString(strlen(message), message_length_manchester);
@@ -276,10 +276,7 @@ void SystemClock_Config(void)
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
   // check to see if the interupt was caused by the Rx Pin edge
-	// TODO: Impliment BUSY CODE
-	// TODO: Implement IDLE CODE
 	if(GPIO_Pin == Rx_Pin){
-		//@FIXME
 		//RX changed -> busy unless proven otherwise
 		HAL_GPIO_WritePin(BUSY_GPIO_Port, BUSY_Pin, GPIO_PIN_SET);
 		HAL_GPIO_WritePin(IDLE_GPIO_Port, IDLE_Pin, GPIO_PIN_RESET);
@@ -297,20 +294,6 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 		} else { //Falling edge ->collision
 			HAL_TIM_Base_Start_IT(&htim9); //start collision timer
 		}
-
-
-
-//		// RISING EDGE
-//		if(HAL_GPIO_ReadPin(Rx_GPIO_Port, Rx_Pin) == GPIO_PIN_SET){
-//			// start idle timer
-//			HAL_TIM_Base_Stop_IT(&htim9); // stop collision timer
-//			__HAL_TIM_SET_COUNTER(&htim9, 0); // reset collision timer count register
-//			HAL_GPIO_WritePin(COLLISION_GPIO_Port, COLLISION_Pin, GPIO_PIN_RESET);// set collision to low
-//
-//		} else {
-//
-//			HAL_TIM_Base_Start_IT(&htim9); // start collision timer
-//		}
 
 	}
 }
