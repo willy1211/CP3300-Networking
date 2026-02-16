@@ -185,6 +185,8 @@ int main(void)
   MX_TIM10_Init();
   MX_TIM9_Init();
   MX_TIM11_Init();
+  MX_TIM2_Init();
+  MX_TIM8_Init();
   /* USER CODE BEGIN 2 */
   char *manchester_message;
   char *binary_message;
@@ -203,6 +205,7 @@ int main(void)
 	  char message[256] = {0};
 	  //scanf("%s255", message);
 	  HAL_TIM_Base_Start_IT(&htim9);
+	  HAL_TIM_Base_Start(&htim8);
 
 	  while (1){};
 	  // convert the message length into manchester form.
@@ -273,7 +276,7 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-
+uint32_t last_time = 0;
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
   // check to see if the interupt was caused by the Rx Pin edge
 	// TODO: Impliment BUSY CODE
@@ -297,6 +300,16 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 		} else { //Falling edge ->collision
 			HAL_TIM_Base_Start_IT(&htim9); //start collision timer
 		}
+		uint32_t current_time = __HAL_TIM_GET_COUNTER(&htim8);
+		// 2. Calculate the difference (handling the 16-bit wrap-around)
+		uint32_t diff;
+		if (current_time >= last_time) {
+			diff = current_time - last_time;
+		} else {
+			// Timer rolled over (reached ARR and started back at 0)
+			diff = (htim8.Instance->ARR - last_time) + current_time + 1;
+		}
+		printf("%d \n", (int)diff);
 
 
 
@@ -314,6 +327,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 
 	}
 }
+
 
 /* USER CODE END 4 */
 
