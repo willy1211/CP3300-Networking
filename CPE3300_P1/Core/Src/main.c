@@ -18,6 +18,8 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "usart.h"
+#include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -26,18 +28,34 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+
+#include "transmitter.h"
+#include "tim.h"
+
 /* USER CODE END Includes */
+
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+bool transmitting = false;
+const char *manchester_start = "1001100110011001";
 
+int message_index = 0;
+char *combined_message;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
 #define GETCHAR_PROTOTYPE int __io_getchar(void)
-bool send_data = true;
+
+typedef enum
+{
+  IDLE,
+  BUSY,
+  COLLISION,
+} state_t;
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -47,19 +65,25 @@ bool send_data = true;
 
 /* Private variables ---------------------------------------------------------*/
 
-TIM_HandleTypeDef htim10;
-
-UART_HandleTypeDef huart1;
-
 /* USER CODE BEGIN PV */
+//Add Receiver variables @Will
+#define HALF_BIT_MIN 350  //These values are placeholder for now
+#define HALF_BIT_MAX 700
+#define FULL_BIT_MIN 720
+#define FULL_BIT_MAX 1400
+#define MAX_BITS 2048
+
+uint8_t rx_bits [MAX_BITS];
+uint8_t rx_bit_index = 0;
+
+uint8_t last_edge_time = 0;
+uint8_t last_level = 1;
+bool receiving = false;
 
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
-static void MX_GPIO_Init(void);
-static void MX_USART1_UART_Init(void);
-static void MX_TIM10_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -80,74 +104,79 @@ GETCHAR_PROTOTYPE
 	return ch;
 }
 
+void sendBit(char bit) {
+	if (bit == '0'){
+		HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, RESET);
+	} else if (bit=='1') {
+		HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, SET);
+	}
+}
+
+
+uint16_t times[32] = {0};
+uint16_t rx_index = 0;
+
 // Function to convert string to binary representation
-char *stringToBinary(const char *input){
-	if(!input)
-		return NULL;
 
-	size_t len = strlen(input);
+void startTransmission(){
+	message_index = 0;
+	transmitting = true;
+	HAL_TIM_Base_Start_IT(&htim10);
 
-	//Each character = 8 bits
-	char *binary = malloc(len*8 + 1); //allocate memory at runtime 8bit per character + 1 for Null character
-	if(!binary)
-		return NULL;
-	char *out = binary;
-	// Convert each character to its binary representation
-	for (size_t i = 0; i < len; i++)
-	{
-		unsigned char c = input[i];
-		for (int bit = 7; bit >= 0; bit--)
-		{
-			*out++ = ((c >> bit) & 1) ? '1' : '0';
+}
+
+void stopTransmission(){
+	HAL_TIM_Base_Stop_IT(&htim10);
+	HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, SET);
+	transmitting = false;
+}
+
+// TIM10 has a 0.5ms period. This will allow us to toggle
+// TIM11 is for busy
+// TIM9 is for collision
+// the output pin properly for the manchester encoding.
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
+	if(htim->Instance == TIM10){ // Tx timer
+
+		if(message_index < strlen(combined_message)){
+			sendBit(combined_message[message_index++]);
+		} else {
+      // message has been sent
+			stopTransmission();
 		}
-<<<<<<< Updated upstream
-=======
 
 	} else if (htim->Instance == TIM9){ // Collison timer
-    
 
+		// if Rx is low, after 1.1 ms, enter collsion state
+		if(HAL_GPIO_ReadPin(COLLISION_GPIO_Port, COLLISION_Pin) == GPIO_PIN_RESET){
+			HAL_GPIO_WritePin(COLLISION_GPIO_Port, COLLISION_Pin, GPIO_PIN_SET);
+			HAL_GPIO_WritePin(BUSY_GPIO_Port, BUSY_Pin, GPIO_PIN_RESET);
+		} else {
+			HAL_GPIO_WritePin(COLLISION_GPIO_Port, COLLISION_Pin, GPIO_PIN_RESET);
+		}
 		HAL_TIM_Base_Stop_IT(&htim9);
+
 	} else if (htim->Instance == TIM11){ // idle timer
-		printf("Idle timer triggered");
+		// TODO: ADD IDLE LOGIC
+		// if after 1.1ms rx is high, enter idle state
+		if(HAL_GPIO_ReadPin(Rx_GPIO_Port, Rx_Pin) == GPIO_PIN_SET){
+			HAL_GPIO_WritePin(IDLE_GPIO_Port, IDLE_Pin, GPIO_PIN_SET);
+
+			//clear other states @FIXME
+			HAL_GPIO_WritePin(BUSY_GPIO_Port, BUSY_Pin,GPIO_PIN_RESET);
+			HAL_GPIO_WritePin(COLLISION_GPIO_Port, COLLISION_Pin,GPIO_PIN_RESET);
+
+		} else{
+			//clear idle state
+			HAL_GPIO_WritePin(IDLE_GPIO_Port, IDLE_Pin,GPIO_PIN_RESET);
+
+		}
+
 		HAL_TIM_Base_Stop_IT(&htim11);
->>>>>>> Stashed changes
 	}
-	*out = '\0';
-	return binary;
 }
 
-// Function to convert binary string to Manchester encoding 0->"01", 1->"10"
-char *binaryToManchester(const char *binary){
-	if (!binary)
-		return NULL;
 
-	size_t len = strlen(binary);
-
-	// Each binary bit becomes 2 Manchester bits
-	char *manchester = malloc(len * 2 + 1);
-	if (!manchester)
-		return NULL;
-
-	char *m_out = manchester;
-
-	for (size_t i = 0; i < len; i++)
-	{
-		if (binary[i] == '0')
-		{
-			*m_out++ = '0';
-			*m_out++ = '1';
-		}
-		else if (binary[i] == '1')
-		{
-			*m_out++ = '1';
-			*m_out++ = '0';
-		}
-	}
-
-	*m_out = '\0';
-	return manchester;
-
-}
 /* USER CODE END 0 */
 
 /**
@@ -181,8 +210,13 @@ int main(void)
   MX_GPIO_Init();
   MX_USART1_UART_Init();
   MX_TIM10_Init();
+  MX_TIM9_Init();
+  MX_TIM11_Init();
+  MX_TIM8_Init();
   /* USER CODE BEGIN 2 */
-  HAL_TIM_Base_Start_IT(&htim10);
+  char *manchester_message;
+  char *binary_message;
+  char message_length_manchester[17];
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -190,45 +224,14 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-//	  printf("Hello world.\n");
-//	  HAL_Delay(1000);
-
-
-//The code below was used to test scanf, printing and writing from Realterm
-//	  int number;
-//	  char word[50];
-//	  printf("Enter an integer: ");
-//	  scanf("%d", &number);
-//
-//	  printf("Enter a word: ");
-//	  scanf("%49s", word); // limit length to avoid overflow
-//
-//	  printf("You entered number = %d\n", number);
-//	  printf("You entered word = %s\n", word);
-
-	  char input[50];
-	  printf("Enter a word: ");
-	  //fgets(input, sizeof(input), stdin);
-	  scanf("%49s", input);
-
-	  char *binary = stringToBinary(input);
-	  char *manchester = binaryToManchester(binary);
-
-	  printf("Binary value:\n%s\n", binary);
-	  printf("Manchester encoded value:\n%s\n", manchester);
-
-	  //Free allocated memory
-	  free(binary);
-	  free(manchester);
 
     /* USER CODE BEGIN 3 */
-<<<<<<< Updated upstream
-=======
 	  HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, SET);
-	  printf("Please enter a message to send: ");
+	  printf("Please eneter message to send: ");
 	  char message[256] = {0};
 	  scanf("%s255", message);
-
+	  HAL_TIM_Base_Start_IT(&htim9);
+	  HAL_TIM_Base_Start(&htim8);
 	  // convert the message length into manchester form.
 	  lengthToString(strlen(message), message_length_manchester);
 
@@ -244,15 +247,21 @@ int main(void)
 	  while(transmitting){};
 	  free(binary_message);
 	  free(manchester_message);
-
+	  for(int i = 0; i < rx_index; i++){
+		  printf("%d\n", times[i]);
+	  }
+	  rx_index = 0;
 	  printf("Message sent. \n");
->>>>>>> Stashed changes
+
+	  //Call decoder @Will
+	  if (receiving && rx_bit_index >= 8){
+		  HAL_Delay(5); //wait for frame end
+		  decodeReceivedBits();
+		  receiving = false;
+	  }
   }
-
-
   /* USER CODE END 3 */
 }
-
 
 /**
   * @brief System Clock Configuration
@@ -300,147 +309,130 @@ void SystemClock_Config(void)
   }
 }
 
-/**
-  * @brief TIM10 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM10_Init(void)
-{
-
-  /* USER CODE BEGIN TIM10_Init 0 */
-
-  /* USER CODE END TIM10_Init 0 */
-
-  /* USER CODE BEGIN TIM10_Init 1 */
-
-  /* USER CODE END TIM10_Init 1 */
-  htim10.Instance = TIM10;
-  htim10.Init.Prescaler = 167;
-  htim10.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim10.Init.Period = 499;
-  htim10.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim10.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
-  if (HAL_TIM_Base_Init(&htim10) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM10_Init 2 */
-
-  /* USER CODE END TIM10_Init 2 */
-
-}
-
-/**
-  * @brief USART1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_USART1_UART_Init(void)
-{
-
-  /* USER CODE BEGIN USART1_Init 0 */
-
-  /* USER CODE END USART1_Init 0 */
-
-  /* USER CODE BEGIN USART1_Init 1 */
-
-  /* USER CODE END USART1_Init 1 */
-  huart1.Instance = USART1;
-  huart1.Init.BaudRate = 115200;
-  huart1.Init.WordLength = UART_WORDLENGTH_8B;
-  huart1.Init.StopBits = UART_STOPBITS_1;
-  huart1.Init.Parity = UART_PARITY_NONE;
-  huart1.Init.Mode = UART_MODE_TX_RX;
-  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
-  huart1.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
-  huart1.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
-  if (HAL_UART_Init(&huart1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN USART1_Init 2 */
-
-  /* USER CODE END USART1_Init 2 */
-
-}
-
-/**
-  * @brief GPIO Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_GPIO_Init(void)
-{
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
-/* USER CODE BEGIN MX_GPIO_Init_1 */
-/* USER CODE END MX_GPIO_Init_1 */
-
-  /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
-  __HAL_RCC_GPIOI_CLK_ENABLE();
-  __HAL_RCC_GPIOH_CLK_ENABLE();
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, GPIO_PIN_SET);
-
-  /*Configure GPIO pin : Tx_Pin */
-  GPIO_InitStruct.Pin = Tx_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-  HAL_GPIO_Init(Tx_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : Rx_Pin USR_Pin */
-  GPIO_InitStruct.Pin = Rx_Pin|USR_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
-  HAL_GPIO_Init(GPIOI, &GPIO_InitStruct);
-
-  /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
-
-/* USER CODE BEGIN MX_GPIO_Init_2 */
-/* USER CODE END MX_GPIO_Init_2 */
-}
-
 /* USER CODE BEGIN 4 */
-uint8_t manchester_start_0x55[18] = {1,0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,0};
-uint8_t start_index = 0;
-uint8_t wait_count = 0;
-// TIM10 has a 0.5ms period. This will allow us to toggle
-// the output pin properly for the manchester encoding.
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
-	if(htim->Instance == TIM10){
-		// TODO: add code to send bits
-
-		if(start_index < 17){
-			HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, manchester_start_0x55[start_index++]);
-		} else {
-			HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, GPIO_PIN_SET);
-			start_index = 0;
-			HAL_TIM_Base_Stop(&htim10);
-		}
-	}
-}
-
+uint32_t last_time = 0;
+// 0 for falling
+// 1 for rising edge
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
-	if(GPIO_Pin == USR_Pin){
+  // check to see if the interupt was caused by the Rx Pin edge
+	// TODO: Impliment BUSY CODE
+	// TODO: Implement IDLE CODE
+	if(GPIO_Pin == Rx_Pin){
+		//@FIXME
+		//RX changed -> busy unless proven otherwise
+//		HAL_GPIO_WritePin(BUSY_GPIO_Port, BUSY_Pin, GPIO_PIN_SET);
+//		HAL_GPIO_WritePin(IDLE_GPIO_Port, IDLE_Pin, GPIO_PIN_RESET);
+//		HAL_GPIO_WritePin(COLLISION_GPIO_Port, COLLISION_Pin, GPIO_PIN_RESET);
+//
+//		//Stop both timers since Rx toggled early
+//		HAL_TIM_Base_Stop_IT(&htim9); //collision
+//		HAL_TIM_Base_Stop_IT(&htim11); //idle
+//		__HAL_TIM_SET_COUNTER(&htim9, 0); //reset collision timer count
+//		__HAL_TIM_SET_COUNTER(&htim11, 0); //reset idle timer count
+//
+//		//Rising edge --> idle
+//		if(HAL_GPIO_ReadPin(Rx_GPIO_Port, Rx_Pin)==GPIO_PIN_SET){
+//			HAL_TIM_Base_Start_IT(&htim11); //start idle timer
+//			// if the last edge was a falling edge, then calculate the time
+//			uint16_t time_elapsed = __HAL_TIM_GET_COUNTER(&htim8);
+//			times[rx_index++] = time_elapsed;
+//			HAL_TIM_Base_Stop(&htim8);
+//
+//		} else { //Falling edge ->collision
+//			HAL_TIM_Base_Start_IT(&htim9); //start collision timer
+//			//last_time = __HAL_TIM_GET_COUNTER(&htim8);
+//			HAL_TIM_Base_Stop(&htim8);
+//
+//			__HAL_TIM_SET_COUNTER(&htim8, 0);
+//			HAL_TIM_Base_Start(&htim8);
+//		}
 
-<<<<<<< Updated upstream
-		HAL_TIM_Base_Start_IT(&htim10);
-=======
-      // start the idle timer
-      HAL_TIM_Base_Start_IT(&htim11);
-    } else {
-      // TODO: add falling edge code
-    }
->>>>>>> Stashed changes
+		//Updated callback with manchester decode
+		uint32_t now = __HAL_TIM_GET_COUNTER(&htim8);
+		uint32_t diff;
+
+		if (now >= last_edge_time){
+			diff = now - last_edge_time;
+		} else{
+			diff = (htim8.Instance ->ARR - last_edge_time) + now;
+		}
+
+		last_edge_time = now;
+
+		uint8_t current_level = HAL_GPIO_ReadPin (Rx_GPIO_Port, Rx_Pin);
+
+		//if timing corresponds to half bit, valid manchester transition
+		if(diff > HALF_BIT_MIN && diff < HALF_BIT_MAX){
+			receiving = true;
+
+			//Decode based on transition direction
+			if(last_level == GPIO_PIN_RESET && current_level == GPIO_PIN_SET){
+				//low ->high => bit = 1
+				rx_bits[rx_bit_index++]=1;
+
+			} else if (){
+				//high ->low => bit = 0
+				rx_bits[rx_bit_index++]=0;
+			}
+		}
+
+		last_level = current_level;
+
+
+//		uint32_t current_time = __HAL_TIM_GET_COUNTER(&htim8);
+//		// 2. Calculate the difference (handling the 16-bit wrap-around)
+//		uint32_t diff;
+//		if (current_time >= last_time) {
+//			diff = current_time - last_time;
+//		} else {
+//			// Timer rolled over (reached ARR and started back at 0)
+//			diff = (htim8.Instance->ARR - last_time) + current_time + 1;
+//		}
+//		last_time = current_time;
+//
+//		printf("%d \n", (int)diff);
+
+
+
+//		// RISING EDGE
+//		if(HAL_GPIO_ReadPin(Rx_GPIO_Port, Rx_Pin) == GPIO_PIN_SET){
+//			// start idle timer
+//			HAL_TIM_Base_Stop_IT(&htim9); // stop collision timer
+//			__HAL_TIM_SET_COUNTER(&htim9, 0); // reset collision timer count register
+//			HAL_GPIO_WritePin(COLLISION_GPIO_Port, COLLISION_Pin, GPIO_PIN_RESET);// set collision to low
+//
+//		} else {
+//
+//			HAL_TIM_Base_Start_IT(&htim9); // start collision timer
+//		}
+
 	}
 }
+
+
+// Helper function to convert bits to bytes @Will
+void decodeReceivedBits(){
+    if(rx_bit_index < 8){
+    	return;
+    }
+
+    printf("Received: ");
+
+    for(uint32_t i = 0; i < rx_bit_index; i += 8){
+        char c = 0;
+        for(int b = 0; b < 8; b++){
+            c <<= 1; //shift bit by one position
+            c |= rx_bits[i + b]; //Place the next bit (0 or 1) into the least significant position
+        }
+        printf("%c", c);
+    }
+
+    printf("\n");
+
+    rx_bit_index = 0;
+}
+
+
 /* USER CODE END 4 */
 
 /**
