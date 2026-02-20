@@ -89,6 +89,10 @@ void sendBit(char bit) {
 	}
 }
 
+
+uint16_t times[32] = {0};
+uint16_t rx_index = 0;
+
 // Function to convert string to binary representation
 
 void startTransmission(){
@@ -185,7 +189,6 @@ int main(void)
   MX_TIM10_Init();
   MX_TIM9_Init();
   MX_TIM11_Init();
-  MX_TIM2_Init();
   MX_TIM8_Init();
   /* USER CODE BEGIN 2 */
   char *manchester_message;
@@ -203,11 +206,9 @@ int main(void)
 	  HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, SET);
 	  printf("Please eneter message to send: ");
 	  char message[256] = {0};
-	  //scanf("%s255", message);
+	  scanf("%s255", message);
 	  HAL_TIM_Base_Start_IT(&htim9);
 	  HAL_TIM_Base_Start(&htim8);
-
-	  while (1){};
 	  // convert the message length into manchester form.
 	  lengthToString(strlen(message), message_length_manchester);
 
@@ -223,7 +224,10 @@ int main(void)
 	  while(transmitting){};
 	  free(binary_message);
 	  free(manchester_message);
-
+	  for(int i = 0; i < rx_index; i++){
+		  printf("%d\n", times[i]);
+	  }
+	  rx_index = 0;
 	  printf("Message sent. \n");
   }
   /* USER CODE END 3 */
@@ -277,11 +281,13 @@ void SystemClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 uint32_t last_time = 0;
+// 0 for falling
+// 1 for rising edge
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
   // check to see if the interupt was caused by the Rx Pin edge
 	// TODO: Impliment BUSY CODE
 	// TODO: Implement IDLE CODE
-	if(GPIO_Pin == Rx_Pin){
+if(GPIO_Pin == Rx_Pin){
 		//@FIXME
 		//RX changed -> busy unless proven otherwise
 		HAL_GPIO_WritePin(BUSY_GPIO_Port, BUSY_Pin, GPIO_PIN_SET);
@@ -297,19 +303,32 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 		//Rising edge --> idle
 		if(HAL_GPIO_ReadPin(Rx_GPIO_Port, Rx_Pin)==GPIO_PIN_SET){
 			HAL_TIM_Base_Start_IT(&htim11); //start idle timer
+			// if the last edge was a falling edge, then calculate the time
+			uint16_t time_elapsed = __HAL_TIM_GET_COUNTER(&htim8);
+			times[rx_index++] = time_elapsed;
+			HAL_TIM_Base_Stop(&htim8);
+
 		} else { //Falling edge ->collision
 			HAL_TIM_Base_Start_IT(&htim9); //start collision timer
+			//last_time = __HAL_TIM_GET_COUNTER(&htim8);
+			HAL_TIM_Base_Stop(&htim8);
+
+			__HAL_TIM_SET_COUNTER(&htim8, 0);
+			HAL_TIM_Base_Start(&htim8);
 		}
-		uint32_t current_time = __HAL_TIM_GET_COUNTER(&htim8);
-		// 2. Calculate the difference (handling the 16-bit wrap-around)
-		uint32_t diff;
-		if (current_time >= last_time) {
-			diff = current_time - last_time;
-		} else {
-			// Timer rolled over (reached ARR and started back at 0)
-			diff = (htim8.Instance->ARR - last_time) + current_time + 1;
-		}
-		printf("%d \n", (int)diff);
+
+//		uint32_t current_time = __HAL_TIM_GET_COUNTER(&htim8);
+//		// 2. Calculate the difference (handling the 16-bit wrap-around)
+//		uint32_t diff;
+//		if (current_time >= last_time) {
+//			diff = current_time - last_time;
+//		} else {
+//			// Timer rolled over (reached ARR and started back at 0)
+//			diff = (htim8.Instance->ARR - last_time) + current_time + 1;
+//		}
+//		last_time = current_time;
+//
+//		printf("%d \n", (int)diff);
 
 
 
