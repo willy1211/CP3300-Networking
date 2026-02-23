@@ -30,6 +30,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include "transmitter.h"
+#include "receiver.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -39,6 +40,10 @@ const char *manchester_start = "1001100110011001";
 
 int message_index = 0;
 char *combined_message;
+volatile bool idle = true;
+bool print_times = false;
+volatile bool start_of_transmission = true;
+
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -90,14 +95,16 @@ void sendBit(char bit) {
 }
 
 
-uint16_t times[32] = {0};
-uint16_t rx_index = 0;
-
+volatile uint16_t times[128] = {0};
+volatile uint16_t times_index = 0;
+volatile uint16_t rx_index = 0;
+volatile char rx_message[355];
 // Function to convert string to binary representation
 
 void startTransmission(){
 	message_index = 0;
 	transmitting = true;
+	start_of_transmission = true;
 	HAL_TIM_Base_Start_IT(&htim10);
 
 }
@@ -106,6 +113,7 @@ void stopTransmission(){
 	HAL_TIM_Base_Stop_IT(&htim10);
 	HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, SET);
 	transmitting = false;
+
 }
 
 // TIM10 has a 0.5ms period. This will allow us to toggle
@@ -138,14 +146,18 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 		// if after 1.1ms rx is high, enter idle state
 		if(HAL_GPIO_ReadPin(Rx_GPIO_Port, Rx_Pin) == GPIO_PIN_SET){
 			HAL_GPIO_WritePin(IDLE_GPIO_Port, IDLE_Pin, GPIO_PIN_SET);
-
 			//clear other states @FIXME
+			//start_of_transmission = true;
+
+			//rx_message[rx_index+1] = '\0';
+
 			HAL_GPIO_WritePin(BUSY_GPIO_Port, BUSY_Pin,GPIO_PIN_RESET);
 			HAL_GPIO_WritePin(COLLISION_GPIO_Port, COLLISION_Pin,GPIO_PIN_RESET);
 
 		} else{
 			//clear idle state
 			HAL_GPIO_WritePin(IDLE_GPIO_Port, IDLE_Pin,GPIO_PIN_RESET);
+			idle=false;
 
 		}
 
@@ -203,12 +215,16 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+
 	  HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, SET);
 	  printf("Please eneter message to send: ");
+	  rx_message[0] ='0';
+	  rx_index = 0;
+	  start_of_transmission = true;
 	  char message[256] = {0};
 	  scanf("%s255", message);
 	  HAL_TIM_Base_Start_IT(&htim9);
-	  HAL_TIM_Base_Start(&htim8);
+
 	  // convert the message length into manchester form.
 	  lengthToString(strlen(message), message_length_manchester);
 
@@ -218,17 +234,19 @@ int main(void)
 	  int combined_length = strlen(manchester_start) + strlen(message_length_manchester) + strlen(manchester_message);
 	  combined_message = malloc((combined_length + 1) * sizeof(char));
 	  snprintf(combined_message, (combined_length + 1) * sizeof(char), "%s%s%s", manchester_start, message_length_manchester, manchester_message);
-
 	  startTransmission();
-	  HAL_Delay(100);
+
 	  while(transmitting){};
 	  free(binary_message);
 	  free(manchester_message);
-	  for(int i = 0; i < rx_index; i++){
-		  printf("%d\n", times[i]);
-	  }
-	  rx_index = 0;
+
 	  printf("Message sent. \n");
+	  rx_message[rx_index + 1] = '\0';
+	  printf("%s\n", rx_message);
+	  for(int i = 0; i < times_index; i++){
+		//  printf("%d\n", times[i]);
+	  }
+	  times_index = 0;
   }
   /* USER CODE END 3 */
 }
@@ -280,7 +298,8 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-uint32_t last_time = 0;
+volatile bool skip_edge = true;
+
 // 0 for falling
 // 1 for rising edge
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
@@ -288,62 +307,53 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 	// TODO: Impliment BUSY CODE
 	// TODO: Implement IDLE CODE
 if(GPIO_Pin == Rx_Pin){
-		//@FIXME
-		//RX changed -> busy unless proven otherwise
-		HAL_GPIO_WritePin(BUSY_GPIO_Port, BUSY_Pin, GPIO_PIN_SET);
-		HAL_GPIO_WritePin(IDLE_GPIO_Port, IDLE_Pin, GPIO_PIN_RESET);
-		HAL_GPIO_WritePin(COLLISION_GPIO_Port, COLLISION_Pin, GPIO_PIN_RESET);
+	if(start_of_transmission == true){
+		__HAL_TIM_SET_COUNTER(&htim8, 0);
+		HAL_TIM_Base_Start(&htim8);
+		start_of_transmission = false;
+		return;
+	}
 
-		//Stop both timers since Rx toggled early
-		HAL_TIM_Base_Stop_IT(&htim9); //collision
+	GPIO_PinState rx_value = HAL_GPIO_ReadPin(Rx_GPIO_Port, Rx_Pin);
+
+	uint16_t time_elapsed = __HAL_TIM_GET_COUNTER(&htim8);
+	times[times_index++] = time_elapsed;
+
+	if(time_elapsed < 750) {
+		if(skip_edge == true) {
+			skip_edge = false;
+		} else {
+			if(rx_value == GPIO_PIN_SET){
+				rx_message[++rx_index] = '1';
+			} else {
+				rx_message[++rx_index] = '0';
+			}
+			skip_edge = true;
+		}
+	} else {
+		if(rx_value == GPIO_PIN_SET){
+			rx_message[++rx_index] = '1';
+		} else {
+			rx_message[++rx_index] = '0';
+
+		}
+		skip_edge = true;
+		//rx_message[rx_index++] = HAL_GPIO_ReadPin(Rx_GPIO_Port, Rx_Pin);
+
+	}
 		HAL_TIM_Base_Stop_IT(&htim11); //idle
-		__HAL_TIM_SET_COUNTER(&htim9, 0); //reset collision timer count
-		__HAL_TIM_SET_COUNTER(&htim11, 0); //reset idle timer count
 
 		//Rising edge --> idle
-		if(HAL_GPIO_ReadPin(Rx_GPIO_Port, Rx_Pin)==GPIO_PIN_SET){
-			HAL_TIM_Base_Start_IT(&htim11); //start idle timer
-			// if the last edge was a falling edge, then calculate the time
-			uint16_t time_elapsed = __HAL_TIM_GET_COUNTER(&htim8);
-			times[rx_index++] = time_elapsed;
-			HAL_TIM_Base_Stop(&htim8);
+		if(rx_value == GPIO_PIN_SET){
 
+			__HAL_TIM_SET_COUNTER(&htim11, 0);
+			HAL_TIM_Base_Start_IT(&htim11);
 		} else { //Falling edge ->collision
-			HAL_TIM_Base_Start_IT(&htim9); //start collision timer
-			//last_time = __HAL_TIM_GET_COUNTER(&htim8);
-			HAL_TIM_Base_Stop(&htim8);
 
-			__HAL_TIM_SET_COUNTER(&htim8, 0);
-			HAL_TIM_Base_Start(&htim8);
 		}
 
-//		uint32_t current_time = __HAL_TIM_GET_COUNTER(&htim8);
-//		// 2. Calculate the difference (handling the 16-bit wrap-around)
-//		uint32_t diff;
-//		if (current_time >= last_time) {
-//			diff = current_time - last_time;
-//		} else {
-//			// Timer rolled over (reached ARR and started back at 0)
-//			diff = (htim8.Instance->ARR - last_time) + current_time + 1;
-//		}
-//		last_time = current_time;
-//
-//		printf("%d \n", (int)diff);
-
-
-
-//		// RISING EDGE
-//		if(HAL_GPIO_ReadPin(Rx_GPIO_Port, Rx_Pin) == GPIO_PIN_SET){
-//			// start idle timer
-//			HAL_TIM_Base_Stop_IT(&htim9); // stop collision timer
-//			__HAL_TIM_SET_COUNTER(&htim9, 0); // reset collision timer count register
-//			HAL_GPIO_WritePin(COLLISION_GPIO_Port, COLLISION_Pin, GPIO_PIN_RESET);// set collision to low
-//
-//		} else {
-//
-//			HAL_TIM_Base_Start_IT(&htim9); // start collision timer
-//		}
-
+		__HAL_TIM_SET_COUNTER(&htim8, 0);
+		HAL_TIM_Base_Start(&htim8);
 	}
 }
 
