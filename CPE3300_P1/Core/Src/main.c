@@ -260,37 +260,99 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
-	  HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, SET);
-	  printf("Please enter message to send: ");
-	  rx_message[0] ='0';
+//	  HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, SET);
+//	  printf("Please enter message to send: ");
+//	  rx_message[0] ='0';
+//	  rx_index = 0;
+//	  start_of_transmission = true;
+//	  char message[256] = {0};
+//	  scanf("%255s", message);
+//	  HAL_TIM_Base_Start_IT(&htim9);
+//
+//	  // convert the message length into manchester form.
+//	  lengthToString(strlen(message), message_length_manchester);
+//
+//	  binary_message = stringToBinary(message);
+//	  manchester_message = binaryToManchester(binary_message);
+//
+//	  int combined_length = strlen(manchester_start) + strlen(message_length_manchester) + strlen(manchester_message);
+//	  combined_message = malloc((combined_length + 1) * sizeof(char));
+//	  snprintf(combined_message, (combined_length + 1) * sizeof(char), "%s%s%s", manchester_start, message_length_manchester, manchester_message);
+//	  startTransmission();
+//
+//	  while(transmitting){};
+//	  free(binary_message);
+//	  free(manchester_message);
+//
+//	  printf("Message sent. \n");
+//	  rx_message[rx_index + 1] = '\0';
+//	  printf("%s\n", rx_message);
+//	  for(int i = 0; i < times_index; i++){
+//		//  printf("%d\n", times[i]);
+//	  }
+//	  times_index = 0;
+
+	  //Updated main code
+
+	  char message[256] = {0};
+	  printf("Please enter a message to send: ");
+	  scanf("%s255", message);
+
+	  //Wait until line is IDLE before transmitting
+	  //while(current_state != IDLE);
+	  rx_message[0]='0';
 	  rx_index = 0;
 	  start_of_transmission = true;
-	  char message[256] = {0};
-	  scanf("%s255", message);
-	  HAL_TIM_Base_Start_IT(&htim9);
 
-	  // convert the message length into manchester form.
+	  //Convert message length to Manchester
 	  lengthToString(strlen(message), message_length_manchester);
 
 	  binary_message = stringToBinary(message);
 	  manchester_message = binaryToManchester(binary_message);
 
-	  int combined_length = strlen(manchester_start) + strlen(message_length_manchester) + strlen(manchester_message);
-	  combined_message = malloc((combined_length + 1) * sizeof(char));
-	  snprintf(combined_message, (combined_length + 1) * sizeof(char), "%s%s%s", manchester_start, message_length_manchester, manchester_message);
-	  startTransmission();
+	  int combined_length =
+			strlen(manchester_start) +
+			strlen(message_length_manchester) +
+			strlen(manchester_message);
 
-	  while(transmitting){};
-	  free(binary_message);
-	  free(manchester_message);
+		combined_message = malloc(combined_length + 1);
 
-	  printf("Message sent. \n");
-	  rx_message[rx_index + 1] = '\0';
-	  printf("%s\n", rx_message);
-	  for(int i = 0; i < times_index; i++){
-		//  printf("%d\n", times[i]);
-	  }
-	  times_index = 0;
+		snprintf(combined_message,
+				 combined_length + 1,
+				 "%s%s%s",
+				 manchester_start,
+				 message_length_manchester,
+				 manchester_message);
+
+		//Start Transmission
+		setState(BUSY);
+		startTransmission();
+
+		// Wait for transmission to complete
+		while(transmitting);
+
+		// Collision handling
+		if(current_state == COLLISION)
+		{
+			printf("Collision detected! Transmission aborted.\n");
+			setState(IDLE);
+		}
+		else
+		{
+			printf("Message sent successfully.\n");
+			setState(IDLE);
+		}
+
+		//Cleanup
+		free(binary_message);
+		free(manchester_message);
+		free(combined_message);
+
+		// Print received message
+		rx_message[rx_index + 1] = '\0';
+		printf("Received: %s\n", rx_message);
+
+		times_index = 0;
 
   }
   /* USER CODE END 3 */
