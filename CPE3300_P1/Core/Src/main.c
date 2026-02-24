@@ -44,6 +44,13 @@ volatile bool idle = true;
 bool print_times = false;
 volatile bool start_of_transmission = true;
 
+typedef enum
+{
+  IDLE,
+  BUSY,
+  COLLISION,
+} state_t;
+
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -61,12 +68,40 @@ volatile bool start_of_transmission = true;
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+volatile state_t current_state;
 
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
+
+//Function to set state
+void setState(state_t new_state)
+{
+    current_state = new_state;
+
+    switch(new_state)
+    {
+        case IDLE:
+            HAL_GPIO_WritePin(IDLE_GPIO_Port, IDLE_Pin, GPIO_PIN_SET);
+            HAL_GPIO_WritePin(BUSY_GPIO_Port, BUSY_Pin, GPIO_PIN_RESET);
+            HAL_GPIO_WritePin(COLLISION_GPIO_Port, COLLISION_Pin, GPIO_PIN_RESET);
+            break;
+
+        case BUSY:
+            HAL_GPIO_WritePin(IDLE_GPIO_Port, IDLE_Pin, GPIO_PIN_RESET);
+            HAL_GPIO_WritePin(BUSY_GPIO_Port, BUSY_Pin, GPIO_PIN_SET);
+            HAL_GPIO_WritePin(COLLISION_GPIO_Port, COLLISION_Pin, GPIO_PIN_RESET);
+            break;
+
+        case COLLISION:
+            HAL_GPIO_WritePin(IDLE_GPIO_Port, IDLE_Pin, GPIO_PIN_RESET);
+            HAL_GPIO_WritePin(BUSY_GPIO_Port, BUSY_Pin, GPIO_PIN_RESET);
+            HAL_GPIO_WritePin(COLLISION_GPIO_Port, COLLISION_Pin, GPIO_PIN_SET);
+            break;
+    }
+}
 
 /* USER CODE END PFP */
 
@@ -116,26 +151,29 @@ void stopTransmission(){
 
 // TIM10 has a 0.5ms period. This will allow us to toggle
 // TIM11 is for busy
-// TIM9 is for collision
+// TIM9 is for collision // current_state = IDLE;
 // the output pin properly for the manchester encoding.
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	if(htim->Instance == TIM10){ // Tx timer
   
 		if(message_index < strlen(combined_message)){
 			sendBit(combined_message[message_index++]);
+			setState(BUSY); //Busy state while transmitting
 		} else {
-      // message has been sent
+          // message has been sent
 			stopTransmission();
+			setState(IDLE);
 		}
 
 	} else if (htim->Instance == TIM9){ // Collison timer
 
 		// if Rx is low, after 1.1 ms, enter collsion state
 		if(HAL_GPIO_ReadPin(COLLISION_GPIO_Port, COLLISION_Pin) == GPIO_PIN_RESET){
-			HAL_GPIO_WritePin(COLLISION_GPIO_Port, COLLISION_Pin, GPIO_PIN_SET);
-			HAL_GPIO_WritePin(BUSY_GPIO_Port, BUSY_Pin, GPIO_PIN_RESET);
+			setState(COLLISION);
+
 		} else {
-			HAL_GPIO_WritePin(COLLISION_GPIO_Port, COLLISION_Pin, GPIO_PIN_RESET);
+			//HAL_GPIO_WritePin(COLLISION_GPIO_Port, COLLISION_Pin, GPIO_PIN_RESET);
+			setState(BUSY);
 		}
 		HAL_TIM_Base_Stop_IT(&htim9);
 
@@ -143,18 +181,29 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 		// TODO: ADD IDLE LOGIC
 		// if after 1.1ms rx is high, enter idle state
 		if(HAL_GPIO_ReadPin(Rx_GPIO_Port, Rx_Pin) == GPIO_PIN_SET){
-			HAL_GPIO_WritePin(IDLE_GPIO_Port, IDLE_Pin, GPIO_PIN_SET);
-			HAL_GPIO_WritePin(BUSY_GPIO_Port, BUSY_Pin,GPIO_PIN_RESET);
-			HAL_GPIO_WritePin(COLLISION_GPIO_Port, COLLISION_Pin,GPIO_PIN_RESET);
+
+			setState(IDLE);
+
+//			HAL_GPIO_WritePin(IDLE_GPIO_Port, IDLE_Pin, GPIO_PIN_SET);
+//			//clear other states @FIXME
+//			//start_of_transmission = true;
+//
+//			//rx_message[rx_index+1] = '\0';
+//
+//			HAL_GPIO_WritePin(BUSY_GPIO_Port, BUSY_Pin,GPIO_PIN_RESET);
+//			HAL_GPIO_WritePin(COLLISION_GPIO_Port, COLLISION_Pin,GPIO_PIN_RESET);
 
 		} else{
 			//clear idle state
-			HAL_GPIO_WritePin(IDLE_GPIO_Port, IDLE_Pin,GPIO_PIN_RESET);
+			//HAL_GPIO_WritePin(IDLE_GPIO_Port, IDLE_Pin,GPIO_PIN_RESET);
+			idle=false;
+			setState(BUSY);
 
 		}
 
 		HAL_TIM_Base_Stop_IT(&htim11);
 	}
+
 }
 
 
@@ -177,6 +226,7 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
+  current_state = IDLE; //Set current state to be iddle
 
   /* USER CODE END Init */
 
@@ -208,29 +258,99 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
-	  HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, SET);
-	  printf("Please eneter message to send: ");
-	  rx_message[0] ='0';
+//	  HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, SET);
+//	  printf("Please enter message to send: ");
+//	  rx_message[0] ='0';
+//	  rx_index = 0;
+//	  start_of_transmission = true;
+//	  char message[256] = {0};
+//	  scanf("%255s", message);
+//	  HAL_TIM_Base_Start_IT(&htim9);
+//
+//	  // convert the message length into manchester form.
+//	  lengthToString(strlen(message), message_length_manchester);
+//
+//	  binary_message = stringToBinary(message);
+//	  manchester_message = binaryToManchester(binary_message);
+//
+//	  int combined_length = strlen(manchester_start) + strlen(message_length_manchester) + strlen(manchester_message);
+//	  combined_message = malloc((combined_length + 1) * sizeof(char));
+//	  snprintf(combined_message, (combined_length + 1) * sizeof(char), "%s%s%s", manchester_start, message_length_manchester, manchester_message);
+//	  startTransmission();
+//
+//	  while(transmitting){};
+//	  free(binary_message);
+//	  free(manchester_message);
+//
+//	  printf("Message sent. \n");
+//	  rx_message[rx_index + 1] = '\0';
+//	  printf("%s\n", rx_message);
+//	  for(int i = 0; i < times_index; i++){
+//		//  printf("%d\n", times[i]);
+//	  }
+//	  times_index = 0;
+
+	  //Updated main code
+
+	  char message[256] = {0};
+	  printf("Please enter a message to send: ");
+	  scanf("%s255", message);
+
+	  //Wait until line is IDLE before transmitting
+	  //while(current_state != IDLE);
+	  rx_message[0]='0';
 	  rx_index = 0;
 	  start_of_transmission = true;
-	  char message[256] = {0};
-	  scanf("%s255", message);
-	  HAL_TIM_Base_Start_IT(&htim9);
 
-	  // convert the message length into manchester form.
+	  //Convert message length to Manchester
 	  lengthToString(strlen(message), message_length_manchester);
 
 	  binary_message = stringToBinary(message);
 	  manchester_message = binaryToManchester(binary_message);
 
-	  int combined_length = strlen(manchester_start) + strlen(message_length_manchester) + strlen(manchester_message);
-	  combined_message = malloc((combined_length + 1) * sizeof(char));
-	  snprintf(combined_message, (combined_length + 1) * sizeof(char), "%s%s%s", manchester_start, message_length_manchester, manchester_message);
-	  startTransmission();
+	  int combined_length =
+			strlen(manchester_start) +
+			strlen(message_length_manchester) +
+			strlen(manchester_message);
 
-	  while(transmitting){};
-	  free(binary_message);
-	  free(manchester_message);
+		combined_message = malloc(combined_length + 1);
+
+		snprintf(combined_message,
+				 combined_length + 1,
+				 "%s%s%s",
+				 manchester_start,
+				 message_length_manchester,
+				 manchester_message);
+
+		//Start Transmission
+		setState(BUSY);
+		startTransmission();
+
+		// Wait for transmission to complete
+		while(transmitting);
+
+		// Collision handling
+		if(current_state == COLLISION)
+		{
+			printf("Collision detected! Transmission aborted.\n");
+			setState(IDLE);
+		}
+		else
+		{
+			printf("Message sent successfully.\n");
+			setState(IDLE);
+		}
+
+		//Cleanup
+		free(binary_message);
+		free(manchester_message);
+		free(combined_message);
+
+		// Print received message
+		rx_message[rx_index + 1] = '\0';
+		printf("Received: %s\n", rx_message);
+
+		times_index = 0;
 
 	  printf("Message sent. \n");
 	  rx_message[rx_index + 1] = '\0';
