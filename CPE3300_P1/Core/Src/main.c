@@ -95,8 +95,6 @@ void sendBit(char bit) {
 }
 
 
-volatile uint16_t times[128] = {0};
-volatile uint16_t times_index = 0;
 volatile uint16_t rx_index = 0;
 volatile char rx_message[355];
 // Function to convert string to binary representation
@@ -146,18 +144,12 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 		// if after 1.1ms rx is high, enter idle state
 		if(HAL_GPIO_ReadPin(Rx_GPIO_Port, Rx_Pin) == GPIO_PIN_SET){
 			HAL_GPIO_WritePin(IDLE_GPIO_Port, IDLE_Pin, GPIO_PIN_SET);
-			//clear other states @FIXME
-			//start_of_transmission = true;
-
-			//rx_message[rx_index+1] = '\0';
-
 			HAL_GPIO_WritePin(BUSY_GPIO_Port, BUSY_Pin,GPIO_PIN_RESET);
 			HAL_GPIO_WritePin(COLLISION_GPIO_Port, COLLISION_Pin,GPIO_PIN_RESET);
 
 		} else{
 			//clear idle state
 			HAL_GPIO_WritePin(IDLE_GPIO_Port, IDLE_Pin,GPIO_PIN_RESET);
-			idle=false;
 
 		}
 
@@ -242,11 +234,8 @@ int main(void)
 
 	  printf("Message sent. \n");
 	  rx_message[rx_index + 1] = '\0';
+	  decodeMessage(rx_message);
 	  printf("%s\n", rx_message);
-	  for(int i = 0; i < times_index; i++){
-		//  printf("%d\n", times[i]);
-	  }
-	  times_index = 0;
   }
   /* USER CODE END 3 */
 }
@@ -308,6 +297,9 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 	// TODO: Implement IDLE CODE
 if(GPIO_Pin == Rx_Pin){
 	if(start_of_transmission == true){
+		// reset the counter
+		 rx_message[0] ='0';
+		 rx_index = 0;
 		__HAL_TIM_SET_COUNTER(&htim8, 0);
 		HAL_TIM_Base_Start(&htim8);
 		start_of_transmission = false;
@@ -315,9 +307,7 @@ if(GPIO_Pin == Rx_Pin){
 	}
 
 	GPIO_PinState rx_value = HAL_GPIO_ReadPin(Rx_GPIO_Port, Rx_Pin);
-
 	uint16_t time_elapsed = __HAL_TIM_GET_COUNTER(&htim8);
-	times[times_index++] = time_elapsed;
 
 	if(time_elapsed < 750) {
 		if(skip_edge == true) {
@@ -335,23 +325,24 @@ if(GPIO_Pin == Rx_Pin){
 			rx_message[++rx_index] = '1';
 		} else {
 			rx_message[++rx_index] = '0';
-
 		}
 		skip_edge = true;
-		//rx_message[rx_index++] = HAL_GPIO_ReadPin(Rx_GPIO_Port, Rx_Pin);
-
 	}
-		HAL_TIM_Base_Stop_IT(&htim11); //idle
 
-		//Rising edge --> idle
-		if(rx_value == GPIO_PIN_SET){
-
-			__HAL_TIM_SET_COUNTER(&htim11, 0);
-			HAL_TIM_Base_Start_IT(&htim11);
-		} else { //Falling edge ->collision
-
-		}
-
+	if(rx_value == GPIO_PIN_SET){
+		// stop collision timer
+		// reset idle timer
+		HAL_TIM_Base_Stop_IT(&htim9);
+		__HAL_TIM_SET_COUNTER(&htim11, 0);
+		HAL_TIM_Base_Start_IT(&htim11);
+	} else {
+		// stop idle timer
+		// reset collision timer
+		HAL_TIM_Base_Stop_IT(&htim11);
+		__HAL_TIM_SET_COUNTER(&htim9, 0);
+		HAL_TIM_Base_Start_IT(&htim9);
+	}
+		// reset timer for timing edges
 		__HAL_TIM_SET_COUNTER(&htim8, 0);
 		HAL_TIM_Base_Start(&htim8);
 	}

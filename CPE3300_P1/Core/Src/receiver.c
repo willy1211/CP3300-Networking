@@ -7,21 +7,25 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-void decodeMessage(uint16_t *times, uint16_t length, char*dest){
-	uint8_t last_bit = 0;
-	bool is_at_center = true;
-	// if the bit transitoin period is long
-	// then that means the next bit has changed
-	// if the transistion is short there was no change to hte bit
-	for(int i = 0; i < length; i++){
-		if (times[i] > 750){
-			dest[i+1] = '1';
-			last_bit = 0;
-		} else {
-			dest[i+1] = '0';
-			last_bit = 0;
+#include <string.h>
+#include <stdio.h>
+
+void decodeMessage(char *message, char *dest){
+	uint8_t length = 0;
+	uint8_t bit_index = 0;
+	for(int i = 8; i < 16;i++){
+		if(message[i] == '1'){
+			length |= (1 << (8 - bit_index++));
 		}
 	}
-	dest[length] = '\0';
+
+	bit_index = 0;
+
+	// loop through each message
+	// convert it to a int and then to a character
+		dest[bit_index] =
+
+//	printf("%d\n", length);
 }
+
 
