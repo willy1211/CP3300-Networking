@@ -42,6 +42,10 @@ volatile bool recieving_message = false;
 int message_index = 0;
 char *combined_message;
 volatile bool start_of_transmission = true;
+char *manchester_message;
+char *binary_message;
+char message_length_manchester[17];
+
 
 typedef enum
 {
@@ -130,7 +134,7 @@ void sendBit(char bit) {
 
 
 volatile uint16_t rx_index = 0;
-volatile char rx_message[2500];
+volatile char rx_message[2500]= {'0'};
 // Function to convert string to binary representation
 
 void startTransmission(){
@@ -145,7 +149,8 @@ void stopTransmission(){
 	HAL_TIM_Base_Stop_IT(&htim10);
 	HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, SET);
 	transmitting = false;
-
+	  free(binary_message);
+	  free(manchester_message);
 }
 
 // TIM10 has a 0.5ms period. This will allow us to toggle
@@ -180,9 +185,11 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 		// if after 1.1ms rx is high, enter idle state
 		if(HAL_GPIO_ReadPin(Rx_GPIO_Port, Rx_Pin) == GPIO_PIN_SET){
 			if(recieving_message == true){
-				recieving_message = false;
 				print_rx_message = true;
+				start_of_transmission = true;
+
 			}
+
 			setState(IDLE);
 
 		} else{
@@ -232,11 +239,12 @@ int main(void)
   MX_TIM11_Init();
   MX_TIM8_Init();
   /* USER CODE BEGIN 2 */
-  char *manchester_message;
-  char *binary_message;
-  char message_length_manchester[17];
+
   HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, SET);
   printf("Listening for a message... \n");
+  char message_to_print[255] = {'F'};
+  char message_to_send_buffer[255] = {'0'};
+  int message_to_send_index = 0;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -246,43 +254,59 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  while(current_state == IDLE && recieving_message == false){
+//	  char entered_char = 0;
+//		__HAL_UART_CLEAR_OREFLAG(&huart1);
+//		if(HAL_UART_Receive(&huart1, (uint8_t *)&entered_char, 1, 20) == HAL_OK){
+//			if(entered_char == '\n' || entered_char == '\r'){
+//				message_to_send_buffer[message_to_send_index] = '\0';
+//				printf("Sending message %s\n", message_to_send_buffer);
+//				message_to_send_index = 0;
+//
+//			} else {
+//				message_to_send_buffer[message_to_send_index++] = entered_char;
+//			}
+//
+//		};
 
-	  printf("Please eneter message to send: ");
-	  rx_message[0] ='0';
-	  rx_index = 0;
-	  start_of_transmission = true;
-	  char message[256] = {0};
-	  scanf("%s255", message);
 
-	  HAL_TIM_Base_Start_IT(&htim9);
-
-	  // convert the message length into manchester form.
-	  lengthToString(strlen(message), message_length_manchester);
-
-	  binary_message = stringToBinary(message);
-	  manchester_message = binaryToManchester(binary_message);
-
-	  int combined_length = strlen(manchester_start) + strlen(message_length_manchester) + strlen(manchester_message);
-	  combined_message = malloc((combined_length + 1) * sizeof(char));
-	  snprintf(combined_message, (combined_length + 1) * sizeof(char), "%s%s%s", manchester_start, message_length_manchester, manchester_message);
-	  startTransmission();
-
-	  while(transmitting){};
-	  free(binary_message);
-	  free(manchester_message);
-
-	  }
-	  printf("Message sent. \n");
-
+	  // use the HAL_UART function to read for a cahracte
+	  // if the character is not a \r or \n add the charactger to the message
+	  // or the ahll call if the character isnt there
+	  // once the recied message is \r or \n start the transmision
+//
+//	  while(current_state == IDLE && recieving_message == false){
+//
+//	  printf("Please eneter message to send: ");
+//	  rx_message[0] ='0';
+//	  rx_index = 0;
+//	  start_of_transmission = true;
+//	  char message[256] = {0};
+//	  scanf("%s255", message);
+//
+//	  HAL_TIM_Base_Start_IT(&htim9);
+//
+//	  // convert the message length into manchester form.
+//	  lengthToString(strlen(message), message_length_manchester);
+//
+//	  binary_message = stringToBinary(message);
+//	  manchester_message = binaryToManchester(binary_message);
+//
+//	  int combined_length = strlen(manchester_start) + strlen(message_length_manchester) + strlen(manchester_message);
+//	  combined_message = malloc((combined_length + 1) * sizeof(char));
+//	  snprintf(combined_message, (combined_length + 1) * sizeof(char), "%s%s%s", manchester_start, message_length_manchester, manchester_message);
+//	  startTransmission();
+//	  }
+//	  printf("OUT OF IDLE LOOP\n");
+//
+	  HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, SET);
 	  if(print_rx_message == true){
-		  rx_message[rx_index + 1] = '\0';
-		  char string_message[255] = {0};
+		  rx_message[rx_index +1] = '\0';
+		  char string_message[255] = {'0'};
 		  decodeBinary(rx_message, string_message);
-		  printf("%s\n", rx_message);
 		  printf("%s\n", string_message);
 		  print_rx_message = false;
-
+		  recieving_message = false;
+		  rx_index = 0;
 	  }
 
   }
