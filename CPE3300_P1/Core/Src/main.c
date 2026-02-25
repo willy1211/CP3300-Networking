@@ -1,20 +1,20 @@
 /* USER CODE BEGIN Header */
 /**
-  ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2026 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
+ ******************************************************************************
+ * @file           : main.c
+ * @brief          : Main program body
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2026 STMicroelectronics.
+ * All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
@@ -46,40 +46,34 @@ char *manchester_message;
 char *binary_message;
 char message_length_manchester[17];
 
-
-typedef enum
-{
-  IDLE,
-  BUSY,
-  COLLISION,
+typedef enum {
+	IDLE, BUSY, COLLISION,
 } state_t;
 
 volatile state_t current_state;
 
-void setState(state_t new_state)
-{
-    current_state = new_state;
+void setState(state_t new_state) {
+	current_state = new_state;
 
-    switch(new_state)
-    {
-        case IDLE:
-            HAL_GPIO_WritePin(IDLE_GPIO_Port, IDLE_Pin, GPIO_PIN_SET);
-            HAL_GPIO_WritePin(BUSY_GPIO_Port, BUSY_Pin, GPIO_PIN_RESET);
-            HAL_GPIO_WritePin(COLLISION_GPIO_Port, COLLISION_Pin, GPIO_PIN_RESET);
-            break;
+	switch (new_state) {
+	case IDLE:
+		HAL_GPIO_WritePin(IDLE_GPIO_Port, IDLE_Pin, GPIO_PIN_SET);
+		HAL_GPIO_WritePin(BUSY_GPIO_Port, BUSY_Pin, GPIO_PIN_RESET);
+		HAL_GPIO_WritePin(COLLISION_GPIO_Port, COLLISION_Pin, GPIO_PIN_RESET);
+		break;
 
-        case BUSY:
-            HAL_GPIO_WritePin(IDLE_GPIO_Port, IDLE_Pin, GPIO_PIN_RESET);
-            HAL_GPIO_WritePin(BUSY_GPIO_Port, BUSY_Pin, GPIO_PIN_SET);
-            HAL_GPIO_WritePin(COLLISION_GPIO_Port, COLLISION_Pin, GPIO_PIN_RESET);
-            break;
+	case BUSY:
+		HAL_GPIO_WritePin(IDLE_GPIO_Port, IDLE_Pin, GPIO_PIN_RESET);
+		HAL_GPIO_WritePin(BUSY_GPIO_Port, BUSY_Pin, GPIO_PIN_SET);
+		HAL_GPIO_WritePin(COLLISION_GPIO_Port, COLLISION_Pin, GPIO_PIN_RESET);
+		break;
 
-        case COLLISION:
-            HAL_GPIO_WritePin(IDLE_GPIO_Port, IDLE_Pin, GPIO_PIN_RESET);
-            HAL_GPIO_WritePin(BUSY_GPIO_Port, BUSY_Pin, GPIO_PIN_RESET);
-            HAL_GPIO_WritePin(COLLISION_GPIO_Port, COLLISION_Pin, GPIO_PIN_SET);
-            break;
-    }
+	case COLLISION:
+		HAL_GPIO_WritePin(IDLE_GPIO_Port, IDLE_Pin, GPIO_PIN_RESET);
+		HAL_GPIO_WritePin(BUSY_GPIO_Port, BUSY_Pin, GPIO_PIN_RESET);
+		HAL_GPIO_WritePin(COLLISION_GPIO_Port, COLLISION_Pin, GPIO_PIN_SET);
+		break;
+	}
 }
 
 /* USER CODE END PTD */
@@ -110,34 +104,31 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-PUTCHAR_PROTOTYPE
-{
-	HAL_UART_Transmit(&huart1, (uint8_t *)&ch, 1, HAL_MAX_DELAY);
+PUTCHAR_PROTOTYPE {
+	HAL_UART_Transmit(&huart1, (uint8_t*) &ch, 1, HAL_MAX_DELAY);
 	return ch;
 }
 
-GETCHAR_PROTOTYPE
-{
+GETCHAR_PROTOTYPE {
 	uint8_t ch = 0;
 	__HAL_UART_CLEAR_OREFLAG(&huart1);
-	HAL_UART_Receive(&huart1, (uint8_t *)&ch, 1, HAL_MAX_DELAY);
+	HAL_UART_Receive(&huart1, (uint8_t*) &ch, 1, HAL_MAX_DELAY);
 	return ch;
 }
 
 void sendBit(char bit) {
-	if (bit == '0'){
+	if (bit == '0') {
 		HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, RESET);
-	} else if (bit=='1') {
+	} else if (bit == '1') {
 		HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, SET);
 	}
 }
 
-
 volatile uint16_t rx_index = 0;
-volatile char rx_message[2500]= {'0'};
+volatile char rx_message[2500] = { '0' };
 // Function to convert string to binary representation
 
-void startTransmission(){
+void startTransmission() {
 	message_index = 0;
 	transmitting = true;
 	start_of_transmission = true;
@@ -145,33 +136,34 @@ void startTransmission(){
 
 }
 
-void stopTransmission(){
+void stopTransmission() {
 	HAL_TIM_Base_Stop_IT(&htim10);
 	HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, SET);
 	transmitting = false;
-	  free(binary_message);
-	  free(manchester_message);
+	free(binary_message);
+	free(manchester_message);
 }
 
 // TIM10 has a 0.5ms period. This will allow us to toggle
 // TIM11 is for busy
 // TIM9 is for collision
 // the output pin properly for the manchester encoding.
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
-	if(htim->Instance == TIM10){ // Tx timer
-  
-		if(message_index < strlen(combined_message)){
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+	if (htim->Instance == TIM10) { // Tx timer
+
+		if (message_index < strlen(combined_message)) {
 			sendBit(combined_message[message_index++]);
 			setState(BUSY); //Busy state while transmitting
 		} else {
-          // message has been sent
+			// message has been sent
 			stopTransmission();
 			setState(IDLE);
 		}
-	} else if (htim->Instance == TIM9){ // Collison timer
+	} else if (htim->Instance == TIM9) { // Collison timer
 
 		// if Rx is low, after 1.1 ms, enter collsion state
-		if(HAL_GPIO_ReadPin(COLLISION_GPIO_Port, COLLISION_Pin) == GPIO_PIN_RESET){
+		if (HAL_GPIO_ReadPin(COLLISION_GPIO_Port, COLLISION_Pin)
+				== GPIO_PIN_RESET) {
 			setState(COLLISION);
 
 		} else {
@@ -180,11 +172,11 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 		}
 		HAL_TIM_Base_Stop_IT(&htim9);
 
-	} else if (htim->Instance == TIM11){ // idle timer
+	} else if (htim->Instance == TIM11) { // idle timer
 		// TODO: ADD IDLE LOGIC
 		// if after 1.1ms rx is high, enter idle state
-		if(HAL_GPIO_ReadPin(Rx_GPIO_Port, Rx_Pin) == GPIO_PIN_SET){
-			if(recieving_message == true){
+		if (HAL_GPIO_ReadPin(Rx_GPIO_Port, Rx_Pin) == GPIO_PIN_SET) {
+			if (recieving_message == true) {
 				print_rx_message = true;
 				start_of_transmission = true;
 
@@ -192,7 +184,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 
 			setState(IDLE);
 
-		} else{
+		} else {
 			//clear idle state
 			//HAL_GPIO_WritePin(IDLE_GPIO_Port, IDLE_Pin,GPIO_PIN_RESET);
 			setState(BUSY);
@@ -201,163 +193,141 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	}
 }
 
-
 /* USER CODE END 0 */
 
 /**
-  * @brief  The application entry point.
-  * @retval int
-  */
-int main(void)
-{
+ * @brief  The application entry point.
+ * @retval int
+ */
+int main(void) {
 
-  /* USER CODE BEGIN 1 */
+	/* USER CODE BEGIN 1 */
 	setvbuf(stdin, NULL, _IONBF, 0);
-  /* USER CODE END 1 */
+	/* USER CODE END 1 */
 
-  /* MCU Configuration--------------------------------------------------------*/
+	/* MCU Configuration--------------------------------------------------------*/
 
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
+	/* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+	HAL_Init();
 
-  /* USER CODE BEGIN Init */
+	/* USER CODE BEGIN Init */
 
-  /* USER CODE END Init */
+	/* USER CODE END Init */
 
-  /* Configure the system clock */
-  SystemClock_Config();
+	/* Configure the system clock */
+	SystemClock_Config();
 
-  /* USER CODE BEGIN SysInit */
+	/* USER CODE BEGIN SysInit */
 
-  /* USER CODE END SysInit */
+	/* USER CODE END SysInit */
 
-  /* Initialize all configured peripherals */
-  MX_GPIO_Init();
-  MX_USART1_UART_Init();
-  MX_TIM10_Init();
-  MX_TIM9_Init();
-  MX_TIM11_Init();
-  MX_TIM8_Init();
-  /* USER CODE BEGIN 2 */
+	/* Initialize all configured peripherals */
+	MX_GPIO_Init();
+	MX_USART1_UART_Init();
+	MX_TIM10_Init();
+	MX_TIM9_Init();
+	MX_TIM11_Init();
+	MX_TIM8_Init();
+	/* USER CODE BEGIN 2 */
 
-  HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, SET);
-  printf("Listening for a message... \n");
-  char message_to_print[255] = {'F'};
-  char message_to_send_buffer[255] = {'0'};
-  int message_to_send_index = 0;
-  /* USER CODE END 2 */
+	HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, SET);
+	printf("Listening for a message... \n");
+	char message_to_print[255] = { 'F' };
+	char message_to_send_buffer[255] = { '0' };
+	int message_to_send_index = 0;
+	/* USER CODE END 2 */
 
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
-  while (1)
-  {
-    /* USER CODE END WHILE */
+	/* Infinite loop */
+	/* USER CODE BEGIN WHILE */
+	while (1) {
+		/* USER CODE END WHILE */
 
-    /* USER CODE BEGIN 3 */
-//	  char entered_char = 0;
-//		__HAL_UART_CLEAR_OREFLAG(&huart1);
-//		if(HAL_UART_Receive(&huart1, (uint8_t *)&entered_char, 1, 20) == HAL_OK){
-//			if(entered_char == '\n' || entered_char == '\r'){
-//				message_to_send_buffer[message_to_send_index] = '\0';
-//				printf("Sending message %s\n", message_to_send_buffer);
-//				message_to_send_index = 0;
-//
-//			} else {
-//				message_to_send_buffer[message_to_send_index++] = entered_char;
-//			}
-//
-//		};
+		/* USER CODE BEGIN 3 */
+		char entered_char = 0;
+		__HAL_UART_CLEAR_OREFLAG(&huart1);
+		if (HAL_UART_Receive(&huart1, (uint8_t*) &entered_char, 1, 20)
+				== HAL_OK) {
+			if (entered_char == '\n' || entered_char == '\r') {
+				message_to_send_buffer[message_to_send_index] = '\0';
+				printf("Sending message %s\n", message_to_send_buffer);
+				message_to_send_index = 0;
 
+				// convert the message length into manchester form.
+				lengthToString(strlen(message_to_send_buffer), message_length_manchester);
 
-	  // use the HAL_UART function to read for a cahracte
-	  // if the character is not a \r or \n add the charactger to the message
-	  // or the ahll call if the character isnt there
-	  // once the recied message is \r or \n start the transmision
-//
-//	  while(current_state == IDLE && recieving_message == false){
-//
-//	  printf("Please eneter message to send: ");
-//	  rx_message[0] ='0';
-//	  rx_index = 0;
-//	  start_of_transmission = true;
-//	  char message[256] = {0};
-//	  scanf("%s255", message);
-//
-//	  HAL_TIM_Base_Start_IT(&htim9);
-//
-//	  // convert the message length into manchester form.
-//	  lengthToString(strlen(message), message_length_manchester);
-//
-//	  binary_message = stringToBinary(message);
-//	  manchester_message = binaryToManchester(binary_message);
-//
-//	  int combined_length = strlen(manchester_start) + strlen(message_length_manchester) + strlen(manchester_message);
-//	  combined_message = malloc((combined_length + 1) * sizeof(char));
-//	  snprintf(combined_message, (combined_length + 1) * sizeof(char), "%s%s%s", manchester_start, message_length_manchester, manchester_message);
-//	  startTransmission();
-//	  }
-//	  printf("OUT OF IDLE LOOP\n");
-//
-	  HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, SET);
-	  if(print_rx_message == true){
-		  rx_message[rx_index +1] = '\0';
-		  char string_message[255] = {'0'};
-		  decodeBinary(rx_message, string_message);
-		  printf("%s\n", string_message);
-		  print_rx_message = false;
-		  recieving_message = false;
-		  rx_index = 0;
-	  }
+				binary_message = stringToBinary(message_to_send_buffer);
+				manchester_message = binaryToManchester(binary_message);
 
-  }
+				int combined_length = strlen(manchester_start)
+						+ strlen(message_length_manchester)
+						+ strlen(manchester_message);
+				combined_message = malloc((combined_length + 1) * sizeof(char));
+				snprintf(combined_message, (combined_length + 1) * sizeof(char),
+						"%s%s%s", manchester_start, message_length_manchester,
+						manchester_message);
+				startTransmission();
 
-  /* USER CODE END 3 */
+			} else {
+				message_to_send_buffer[message_to_send_index++] = entered_char;
+			}
+
+		} else if (print_rx_message == true) {
+			if (print_rx_message == true) {
+				rx_message[rx_index + 1] = '\0';
+				decodeBinary(rx_message, message_to_print);
+				printf("Received Message: %s\n", message_to_print);
+				print_rx_message = false;
+				recieving_message = false;
+				rx_index = 0;
+				printf("Enter message to send: \n");
+			}
+		}
+	}
+
+	/* USER CODE END 3 */
 }
 
 /**
-  * @brief System Clock Configuration
-  * @retval None
-  */
-void SystemClock_Config(void)
-{
-  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+ * @brief System Clock Configuration
+ * @retval None
+ */
+void SystemClock_Config(void) {
+	RCC_OscInitTypeDef RCC_OscInitStruct = { 0 };
+	RCC_ClkInitTypeDef RCC_ClkInitStruct = { 0 };
 
-  /** Configure the main internal regulator output voltage
-  */
-  __HAL_RCC_PWR_CLK_ENABLE();
-  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE2);
+	/** Configure the main internal regulator output voltage
+	 */
+	__HAL_RCC_PWR_CLK_ENABLE();
+	__HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE2);
 
-  /** Initializes the RCC Oscillators according to the specified parameters
-  * in the RCC_OscInitTypeDef structure.
-  */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
-  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
-  RCC_OscInitStruct.PLL.PLLM = 10;
-  RCC_OscInitStruct.PLL.PLLN = 210;
-  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
-  RCC_OscInitStruct.PLL.PLLQ = 2;
-  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-  {
-    Error_Handler();
-  }
+	/** Initializes the RCC Oscillators according to the specified parameters
+	 * in the RCC_OscInitTypeDef structure.
+	 */
+	RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+	RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+	RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+	RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+	RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+	RCC_OscInitStruct.PLL.PLLM = 10;
+	RCC_OscInitStruct.PLL.PLLN = 210;
+	RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
+	RCC_OscInitStruct.PLL.PLLQ = 2;
+	if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
+		Error_Handler();
+	}
 
-  /** Initializes the CPU, AHB and APB buses clocks
-  */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
-  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
+	/** Initializes the CPU, AHB and APB buses clocks
+	 */
+	RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK
+			| RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
+	RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+	RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+	RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
+	RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK)
-  {
-    Error_Handler();
-  }
+	if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK) {
+		Error_Handler();
+	}
 }
 
 /* USER CODE BEGIN 4 */
@@ -365,50 +335,50 @@ volatile bool skip_edge = true;
 
 // 0 for falling
 // 1 for rising edge
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
-  // check to see if the interupt was caused by the Rx Pin edge
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+	// check to see if the interupt was caused by the Rx Pin edge
 	// TODO: Impliment BUSY CODE
 	// TODO: Implement IDLE CODE
-if(GPIO_Pin == Rx_Pin){
-	setState(BUSY);
-	recieving_message = true;
-	if(start_of_transmission == true){
-		__HAL_TIM_SET_COUNTER(&htim8, 0);
-		HAL_TIM_Base_Start(&htim8);
-		start_of_transmission = false;
-		return;
-	}
+	if (GPIO_Pin == Rx_Pin) {
+		setState(BUSY);
+		recieving_message = true;
+		if (start_of_transmission == true) {
+			__HAL_TIM_SET_COUNTER(&htim8, 0);
+			HAL_TIM_Base_Start(&htim8);
+			start_of_transmission = false;
+			return;
+		}
 
-	GPIO_PinState rx_value = HAL_GPIO_ReadPin(Rx_GPIO_Port, Rx_Pin);
+		GPIO_PinState rx_value = HAL_GPIO_ReadPin(Rx_GPIO_Port, Rx_Pin);
 
-	uint16_t time_elapsed = __HAL_TIM_GET_COUNTER(&htim8);
+		uint16_t time_elapsed = __HAL_TIM_GET_COUNTER(&htim8);
 
-	if(time_elapsed < 750) {
-		if(skip_edge == true) {
-			skip_edge = false;
+		if (time_elapsed < 750) {
+			if (skip_edge == true) {
+				skip_edge = false;
+			} else {
+				if (rx_value == GPIO_PIN_SET) {
+					rx_message[++rx_index] = '1';
+				} else {
+					rx_message[++rx_index] = '0';
+				}
+				skip_edge = true;
+			}
 		} else {
-			if(rx_value == GPIO_PIN_SET){
+			if (rx_value == GPIO_PIN_SET) {
 				rx_message[++rx_index] = '1';
 			} else {
 				rx_message[++rx_index] = '0';
+
 			}
 			skip_edge = true;
-		}
-	} else {
-		if(rx_value == GPIO_PIN_SET){
-			rx_message[++rx_index] = '1';
-		} else {
-			rx_message[++rx_index] = '0';
+			//rx_message[rx_index++] = HAL_GPIO_ReadPin(Rx_GPIO_Port, Rx_Pin);
 
 		}
-		skip_edge = true;
-		//rx_message[rx_index++] = HAL_GPIO_ReadPin(Rx_GPIO_Port, Rx_Pin);
-
-	}
 		HAL_TIM_Base_Stop_IT(&htim11); //idle
 
 		//Rising edge --> idle
-		if(rx_value == GPIO_PIN_SET){
+		if (rx_value == GPIO_PIN_SET) {
 
 			__HAL_TIM_SET_COUNTER(&htim11, 0);
 			HAL_TIM_Base_Start_IT(&htim11);
@@ -422,22 +392,19 @@ if(GPIO_Pin == Rx_Pin){
 	}
 }
 
-
 /* USER CODE END 4 */
 
 /**
-  * @brief  This function is executed in case of error occurrence.
-  * @retval None
-  */
-void Error_Handler(void)
-{
-  /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
-  __disable_irq();
-  while (1)
-  {
-  }
-  /* USER CODE END Error_Handler_Debug */
+ * @brief  This function is executed in case of error occurrence.
+ * @retval None
+ */
+void Error_Handler(void) {
+	/* USER CODE BEGIN Error_Handler_Debug */
+	/* User can add his own implementation to report the HAL error return state */
+	__disable_irq();
+	while (1) {
+	}
+	/* USER CODE END Error_Handler_Debug */
 }
 
 #ifdef  USE_FULL_ASSERT
