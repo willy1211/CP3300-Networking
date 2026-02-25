@@ -179,7 +179,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 			if (recieving_message == true) {
 				print_rx_message = true;
 				start_of_transmission = true;
-
 			}
 
 			setState(IDLE);
@@ -245,6 +244,11 @@ int main(void) {
 		/* USER CODE BEGIN 3 */
 		char entered_char = 0;
 		__HAL_UART_CLEAR_OREFLAG(&huart1);
+		// to keep this method non-blocking the character
+		// has to be read from the UART signal one by one.
+		// The HAL_UART_Receive function will return a status of HAL_OK if and only if a
+		// character is retrieved wihtin the timput.
+		// if the character entered is \n or \r the message is sent
 		if (HAL_UART_Receive(&huart1, (uint8_t*) &entered_char, 1, 20)
 				== HAL_OK) {
 			if (entered_char == '\n' || entered_char == '\r') {
@@ -272,16 +276,16 @@ int main(void) {
 			}
 
 		} else if (print_rx_message == true) {
-			if (print_rx_message == true) {
-				rx_message[rx_index + 1] = '\0';
-				decodeBinary(rx_message, message_to_print);
-				printf("Received Message: %s\n", message_to_print);
-				print_rx_message = false;
-				recieving_message = false;
-				rx_index = 0;
-				printf("Enter message to send: \n");
-			}
+			rx_message[rx_index + 1] = '\0';
+			decodeBinary(rx_message, message_to_print);
+			printf("Received Message: %s\n", message_to_print);
+			print_rx_message = false;
+			recieving_message = false;
+			rx_index = 0;
+			printf("Enter message to send: \n");
 		}
+
+		//TODO: add printing for collision
 	}
 
 	/* USER CODE END 3 */
