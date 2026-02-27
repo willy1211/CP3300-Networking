@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "rng.h"
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
@@ -82,6 +83,13 @@ void setState(state_t new_state) {
 /* USER CODE BEGIN PD */
 #define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
 #define GETCHAR_PROTOTYPE int __io_getchar(void)
+
+int random_ms(){
+	uint32_t random32bit  = 0;
+	HAL_RNG_GenerateRandomNumber(&hrng, &random32bit);
+	float random_value = (float)random32bit / 0xFFFFFFFF;
+	int random_ms = (int)(random_value * 1000);
+}
 
 /* USER CODE END PD */
 
@@ -166,6 +174,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 				== GPIO_PIN_RESET) {
 			setState(COLLISION);
 
+
 		} else {
 			//HAL_GPIO_WritePin(COLLISION_GPIO_Port, COLLISION_Pin, GPIO_PIN_RESET);
 			setState(BUSY);
@@ -228,6 +237,7 @@ int main(void)
   MX_TIM9_Init();
   MX_TIM11_Init();
   MX_TIM8_Init();
+  MX_RNG_Init();
   /* USER CODE BEGIN 2 */
 
 	HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, SET);
@@ -252,6 +262,7 @@ int main(void)
 		// if the character entered is \n or \r the message is sent
 		if (HAL_UART_Receive(&huart1, (uint8_t*) &entered_char, 1, 20)
 				== HAL_OK) {
+			// TODO: only send messages that aren't empty
 			if (entered_char == '\n' || entered_char == '\r') {
 				message_to_send_buffer[message_to_send_index] = '\0';
 				printf("Sending message %s\n", message_to_send_buffer);
@@ -273,8 +284,10 @@ int main(void)
 				startTransmission();
 
 			} else {
+				printf("%d\n", random_ms());
 				message_to_send_buffer[message_to_send_index++] = entered_char;
 			}
+
 
 		} else if (print_rx_message == true) {
 			rx_message[rx_index + 1] = '\0';
@@ -284,9 +297,14 @@ int main(void)
 			recieving_message = false;
 			rx_index = 0;
 			printf("Enter message to send: \n");
+		} else if (current_state == COLLISION && transmitting == true){
+			// generate random number
+			// set timer to wait radnom amount of time
+			// use timer IT callback to restart transmission
+
+
 		}
 
-		//TODO: add printing for collision
 	}
 
   /* USER CODE END 3 */
@@ -317,7 +335,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLM = 10;
   RCC_OscInitStruct.PLL.PLLN = 210;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
-  RCC_OscInitStruct.PLL.PLLQ = 2;
+  RCC_OscInitStruct.PLL.PLLQ = 10;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
