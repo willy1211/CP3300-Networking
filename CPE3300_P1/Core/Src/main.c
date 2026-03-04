@@ -286,7 +286,6 @@ int main(void)
 
 
 		} else if (print_rx_message == true && rx_index > 8) {
-
 			rx_message[rx_index + 1] = '\0';
 			decodeBinary(rx_message, message_to_print);
 			printf("Received Message: %s\n", message_to_print);
@@ -294,15 +293,18 @@ int main(void)
 			recieving_message = false;
 			rx_index = 0;
 			printf("Enter message to send: \n");
-		} else if (current_state == COLLISION){
+		} else if (current_state == COLLISION ){
 			// generate random number
 			// set timer to wait radnom amount of time
 			// use timer IT callback to restart transmission
 			rx_index = 0;
+
+			if(transmitting == true){
 			stopTransmission();
 			message_index = 0;
 			random_wait();
 			startTransmission();
+			}
 
 		}
 	}
