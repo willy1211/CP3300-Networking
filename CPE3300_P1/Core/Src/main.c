@@ -84,11 +84,12 @@ void setState(state_t new_state) {
 #define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
 #define GETCHAR_PROTOTYPE int __io_getchar(void)
 
-int random_ms(){
+void random_wait(){
 	uint32_t random32bit  = 0;
 	HAL_RNG_GenerateRandomNumber(&hrng, &random32bit);
 	float random_value = (float)random32bit / 0xFFFFFFFF;
-	int random_ms = (int)(random_value * 1000);
+	int random_wait_ms = (int)(random_value * 1000);
+	HAL_Delay(random_wait_ms);
 }
 
 /* USER CODE END PD */
@@ -148,8 +149,6 @@ void stopTransmission() {
 	HAL_TIM_Base_Stop_IT(&htim10);
 	HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, SET);
 	transmitting = false;
-	free(binary_message);
-	free(manchester_message);
 }
 
 // TIM10 has a 0.5ms period. This will allow us to toggle
@@ -170,10 +169,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 	} else if (htim->Instance == TIM9) { // Collison timer
 
 		// if Rx is low, after 1.1 ms, enter collsion state
-		if (HAL_GPIO_ReadPin(COLLISION_GPIO_Port, COLLISION_Pin)
+		if (HAL_GPIO_ReadPin(Rx_GPIO_Port, Rx_Pin)
 				== GPIO_PIN_RESET) {
 			setState(COLLISION);
-
+			rx_index = 0;
 
 		} else {
 			//HAL_GPIO_WritePin(COLLISION_GPIO_Port, COLLISION_Pin, GPIO_PIN_RESET);
@@ -189,9 +188,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 				print_rx_message = true;
 				start_of_transmission = true;
 			}
-
 			setState(IDLE);
-
 		} else {
 			//clear idle state
 			//HAL_GPIO_WritePin(IDLE_GPIO_Port, IDLE_Pin,GPIO_PIN_RESET);
@@ -284,12 +281,12 @@ int main(void)
 				startTransmission();
 
 			} else {
-				printf("%d\n", random_ms());
 				message_to_send_buffer[message_to_send_index++] = entered_char;
 			}
 
 
-		} else if (print_rx_message == true) {
+		} else if (print_rx_message == true && rx_index > 8) {
+
 			rx_message[rx_index + 1] = '\0';
 			decodeBinary(rx_message, message_to_print);
 			printf("Received Message: %s\n", message_to_print);
@@ -297,16 +294,18 @@ int main(void)
 			recieving_message = false;
 			rx_index = 0;
 			printf("Enter message to send: \n");
-		} else if (current_state == COLLISION && transmitting == true){
+		} else if (current_state == COLLISION){
 			// generate random number
 			// set timer to wait radnom amount of time
 			// use timer IT callback to restart transmission
-
+			rx_index = 0;
+			stopTransmission();
+			message_index = 0;
+			random_wait();
+			startTransmission();
 
 		}
-
 	}
-
   /* USER CODE END 3 */
 }
 
@@ -366,6 +365,23 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 	// TODO: Impliment BUSY CODE
 	// TODO: Implement IDLE CODE
 	if (GPIO_Pin == Rx_Pin) {
+
+		GPIO_PinState rx_value = HAL_GPIO_ReadPin(Rx_GPIO_Port, Rx_Pin);
+
+		HAL_TIM_Base_Stop_IT(&htim11); //idle
+		HAL_TIM_Base_Stop_IT(&htim9);
+
+		//Rising edge --> idle
+		if (rx_value == GPIO_PIN_SET) {
+
+			__HAL_TIM_SET_COUNTER(&htim11, 0);
+			HAL_TIM_Base_Start_IT(&htim11);
+		} else { //Falling edge ->collision
+			__HAL_TIM_SET_COUNTER(&htim9, 0);
+			HAL_TIM_Base_Start_IT(&htim9);
+		}
+
+
 		setState(BUSY);
 		recieving_message = true;
 		if (start_of_transmission == true) {
@@ -374,8 +390,6 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 			start_of_transmission = false;
 			return;
 		}
-
-		GPIO_PinState rx_value = HAL_GPIO_ReadPin(Rx_GPIO_Port, Rx_Pin);
 
 		uint16_t time_elapsed = __HAL_TIM_GET_COUNTER(&htim8);
 
@@ -401,18 +415,6 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 			//rx_message[rx_index++] = HAL_GPIO_ReadPin(Rx_GPIO_Port, Rx_Pin);
 
 		}
-		HAL_TIM_Base_Stop_IT(&htim11); //idle
-
-		//Rising edge --> idle
-		if (rx_value == GPIO_PIN_SET) {
-
-			__HAL_TIM_SET_COUNTER(&htim11, 0);
-			HAL_TIM_Base_Start_IT(&htim11);
-		} else { //Falling edge ->collision
-			__HAL_TIM_SET_COUNTER(&htim9, 0);
-			HAL_TIM_Base_Start_IT(&htim9);
-		}
-
 		__HAL_TIM_SET_COUNTER(&htim8, 0);
 		HAL_TIM_Base_Start(&htim8);
 	}
