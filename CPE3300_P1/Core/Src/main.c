@@ -149,6 +149,8 @@ void stopTransmission() {
 	HAL_TIM_Base_Stop_IT(&htim10);
 	HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, SET);
 	transmitting = false;
+	free(binary_message);
+	free(manchester_message);
 }
 
 // TIM10 has a 0.5ms period. This will allow us to toggle
@@ -172,6 +174,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 		if (HAL_GPIO_ReadPin(Rx_GPIO_Port, Rx_Pin)
 				== GPIO_PIN_RESET) {
 			setState(COLLISION);
+			if(message_index < strlen(combined_message)){
+				HAL_TIM_Base_Stop_IT(&htim10);
+			}
 			rx_index = 0;
 
 		} else {
@@ -299,12 +304,16 @@ int main(void)
 			// use timer IT callback to restart transmission
 			rx_index = 0;
 
-			if(transmitting == true){
-			stopTransmission();
-			message_index = 0;
+			if(message_index < strlen(combined_message)){
+				HAL_TIM_Base_Stop_IT(&htim10);
+				HAL_GPIO_WritePin(Tx_GPIO_Port, Tx_Pin, GPIO_PIN_SET);
 			random_wait();
 			startTransmission();
 			}
+
+			//stopTransmission();
+			//startTransmission();
+
 
 		}
 	}
